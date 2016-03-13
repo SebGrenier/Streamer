@@ -27,13 +27,21 @@ std::ostream& operator << (std::ostream &stream, const ImageInfo &image_info)
 	return stream;
 }
 
-void save_image(const std::vector<char> image, const ImageInfo &image_info, const std::string &filename)
+std::ostream& operator << (std::ostream &stream, const std::vector<char> &vec)
+{
+	for (auto &c : vec) {
+		stream << c;
+	}
+	return stream;
+}
+
+void save_image(const std::vector<uint8_t> image, const ImageInfo &image_info, const std::string &filename)
 {
 	std::ofstream file;
-	file.open(filename);
+	file.open(filename, std::ios::out | std::ios::binary);
 
 	if (file.is_open()) {
-		file.write(image.data(), image.size());
+		file.write((char*)image.data(), image.size());
 		file.close();
 	}
 }
@@ -49,8 +57,8 @@ void receive_image(SOCKET s, sockaddr_in address)
 	std::cout << "Received image info: " << info << std::endl;
 
 	char buffer[max_buffer_size];
-	std::vector<char> image;
-	image.resize(buffer_size);
+	std::vector<uint8_t> image;
+	image.reserve(buffer_size);
 	while(total_received < buffer_size) {
 		recv_len = recvfrom(s, buffer, max_buffer_size, 0, (sockaddr *)&address, &address_size);
 		if (recv_len == SOCKET_ERROR) {
