@@ -1,3 +1,5 @@
+#include "streamer.h"
+
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -16,6 +18,8 @@ constexpr int max_buffer_size = 63 * 1024;
 constexpr const char* server_address = "127.0.0.1";
 constexpr short server_port = 12345;
 int count = 0;
+
+Streamer streamer;
 
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
@@ -144,9 +148,9 @@ bool validate(server *, websocketpp::connection_hdl) {
 
 int main(int argc, char **argv)
 {
+	streamer.init();
+
 	server serv;
-
-
 	try {
 		// Set logging settings
 		serv.set_access_channels(websocketpp::log::alevel::all);
@@ -184,34 +188,9 @@ int main(int argc, char **argv)
 		std::cout << "other exception" << std::endl;
 	}
 
+	if (streamer.stream_opened()) {
+		streamer.close_stream();
+	}
+	streamer.shutdown();
 	return 0;
-
-	//keep listening for data
-	//while (1)
-	//{
-
-	//	//try to receive some data, this is a blocking call
-	//	if ((recv_len = recvfrom(sock, buf, max_buffer_size, 0, (sockaddr *)&si_client, &slen)) == SOCKET_ERROR)
-	//	{
-	//		std:: cout << "recvfrom() failed with error code : " << WSAGetLastError() << std::endl;
-	//		break;
-	//	}
-
-	//	//print details of the client/peer and the data received
-	//	char address[INET_ADDRSTRLEN];
-	//	inet_ntop(AF_INET, &si_client.sin_addr, address, INET_ADDRSTRLEN);
-	//	std::cout << "Received packet from " << address << ":" << ntohs(si_client.sin_port) << std::endl;
-	//	//std::cout << "Data: " << buf << std::endl;
-
-	//	// Break out of loop if we receive a close command
-	//	if (_strcmpi(buf, "close") == 0) {
-	//		break;
-	//	}
-	//	
-	//	if (_strcmpi(buf, "start_image") == 0 && listening_state == RECEIVING_STATE::LISTENING) {
-	//		receive_image(sock, si_client);
-	//	}
-	//}
-
-	//return 0;
 }

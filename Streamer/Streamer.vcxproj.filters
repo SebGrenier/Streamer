@@ -16,10 +16,21 @@
     <Filter Include="Source Files\src">
       <UniqueIdentifier>{67173168-0191-4f1a-9c7f-192a488f6f7a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\src">
+      <UniqueIdentifier>{e92b07e9-3e19-4725-85dc-2b947d0de5a2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files\src</Filter>
     </ClCompile>
+    <ClCompile Include="src\streamer.cpp">
+      <Filter>Source Files\src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\streamer.h">
+      <Filter>Header Files\src</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
