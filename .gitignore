@@ -4,3 +4,5 @@ Streamer/x64/Debug/Streamer.tlog/link.write.1.tlog
 *.opensdf
 *.sdf
 Streamer/x64/
+*.opendb
+Release/

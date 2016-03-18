@@ -1,4 +1,3 @@
-#include <WinSock2.h>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -7,12 +6,32 @@
 #include <fstream>
 #include <sstream>
 
+// The ASIO_STANDALONE define is necessary to use the standalone version of Asio.
+// Remove if you are using Boost Asio.
+//#define ASIO_STANDALONE
+
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/client.hpp>
+
+using client = websocketpp::client<websocketpp::config::asio>;
+using msg_ptr = client::message_ptr;
+
 constexpr const char* server_address = "127.0.0.1";
 constexpr short server_port = 12345;
 constexpr int max_buffer_size = 63 * 1024;
-constexpr const char* start_message = "start";
-constexpr const char* end_message = "end";
-constexpr const char* close_connection_message = "close";
+
+constexpr int width_start = 640;
+constexpr int height_start = 480;
+constexpr int bitdepth = 3;
+
+bool send_udp_check(int status)
+{
+	if (status == SOCKET_ERROR) {
+		std::cout << "send_to_udp() failed with error code : " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	return true;
+}
 
 std::vector<uint8_t>& operator << (std::vector<uint8_t> &vec, std::string &string)
 {
@@ -62,62 +81,244 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 		glfwSetWindowShouldClose(window, GL_TRUE);
 }
 
-int send_to_udp(SOCKET s, sockaddr_in &address, const char *buffer, unsigned buffer_size)
+class ConnectionMetadata
 {
-	auto size_left = buffer_size;
-	int index = 0;
-	int error = 0;
-	while(size_left > max_buffer_size) {
-		error = sendto(s, &buffer[index], max_buffer_size, 0, (struct sockaddr *)&address, sizeof(address));
-		if (error == SOCKET_ERROR) {
-			return error;
-		}
-		size_left -= max_buffer_size;
-		index += max_buffer_size;
+public:
+	typedef websocketpp::lib::shared_ptr<ConnectionMetadata> ptr;
+
+	ConnectionMetadata(int id, websocketpp::connection_hdl hdl, std::string uri)
+		: _id(id)
+		, _hdl(hdl)
+		, _status("Connecting")
+		, _uri(uri)
+		, _server("N/A")
+	{}
+
+	void on_open(client * c, websocketpp::connection_hdl hdl)
+	{
+		_status = "Open";
+
+		client::connection_ptr con = c->get_con_from_hdl(hdl);
+		_server = con->get_response_header("Server");
 	}
 
-	if (size_left > 0) {
-		error = sendto(s, &buffer[index], size_left, 0, (struct sockaddr *)&address, sizeof(address));
+	void on_fail(client * c, websocketpp::connection_hdl hdl)
+	{
+		_status = "Failed";
+
+		client::connection_ptr con = c->get_con_from_hdl(hdl);
+		_server = con->get_response_header("Server");
+		_error_reason = con->get_ec().message();
 	}
 
-	return error;
+	void on_close(client * c, websocketpp::connection_hdl hdl)
+	{
+		_status = "Closed";
+		client::connection_ptr con = c->get_con_from_hdl(hdl);
+		std::stringstream s;
+		s << "close code: " << con->get_remote_close_code() << " ("
+			<< websocketpp::close::status::get_string(con->get_remote_close_code())
+			<< "), close reason: " << con->get_remote_close_reason();
+		_error_reason = s.str();
+	}
+
+	websocketpp::connection_hdl get_hdl() const
+	{
+		return _hdl;
+	}
+
+	int get_id() const
+	{
+		return _id;
+	}
+
+	std::string get_status() const
+	{
+		return _status;
+	}
+
+	friend std::ostream & operator<< (std::ostream & out, ConnectionMetadata const & data);
+private:
+	int _id;
+	websocketpp::connection_hdl _hdl;
+	std::string _status;
+	std::string _uri;
+	std::string _server;
+	std::string _error_reason;
+};
+
+std::ostream & operator<< (std::ostream & out, ConnectionMetadata const & data)
+{
+	out << "> URI: " << data._uri << "\n"
+		<< "> Status: " << data._status << "\n"
+		<< "> Remote Server: " << (data._server.empty() ? "None Specified" : data._server) << "\n"
+		<< "> Error/close reason: " << (data._error_reason.empty() ? "N/A" : data._error_reason);
+
+	return out;
 }
+
+class StreamClient
+{
+public:
+	StreamClient() 
+		: _next_id(0)
+	{
+		_client.clear_access_channels(websocketpp::log::alevel::all);
+		_client.clear_error_channels(websocketpp::log::elevel::all);
+
+		_client.init_asio();
+		_client.start_perpetual();
+
+		_thread.reset(new websocketpp::lib::thread(&client::run, &_client));
+	}
+
+	~StreamClient()
+	{
+		_client.stop_perpetual();
+
+		for (connection_list::const_iterator it = _connection_list.begin(); it != _connection_list.end(); ++it) {
+			if (it->second->get_status() != "Open") {
+				// Only close open connections
+				continue;
+			}
+
+			std::cout << "> Closing connection " << it->second->get_id() << std::endl;
+
+			websocketpp::lib::error_code ec;
+			_client.close(it->second->get_hdl(), websocketpp::close::status::going_away, "", ec);
+			if (ec) {
+				std::cout << "> Error closing connection " << it->second->get_id() << ": "
+					<< ec.message() << std::endl;
+			}
+		}
+
+		_thread->join();
+	}
+
+	int connect(std::string const & uri)
+	{
+		websocketpp::lib::error_code ec;
+
+		client::connection_ptr con = _client.get_connection(uri, ec);
+
+		if (ec) {
+			std::cout << "> Connect initialization error: " << ec.message() << std::endl;
+			return -1;
+		}
+
+		int new_id = _next_id++;
+		ConnectionMetadata::ptr metadata_ptr(new ConnectionMetadata(new_id, con->get_handle(), uri));
+		_connection_list[new_id] = metadata_ptr;
+
+		con->set_open_handler(websocketpp::lib::bind(
+			&ConnectionMetadata::on_open,
+			metadata_ptr,
+			&_client,
+			websocketpp::lib::placeholders::_1
+			));
+		con->set_fail_handler(websocketpp::lib::bind(
+			&ConnectionMetadata::on_fail,
+			metadata_ptr,
+			&_client,
+			websocketpp::lib::placeholders::_1
+			));
+		con->set_close_handler(websocketpp::lib::bind(
+			&ConnectionMetadata::on_close,
+			metadata_ptr,
+			&_client,
+			websocketpp::lib::placeholders::_1
+			));
+
+		_client.connect(con);
+
+		return new_id;
+	}
+
+	void close(int id, websocketpp::close::status::value code, std::string reason)
+	{
+		websocketpp::lib::error_code ec;
+
+		connection_list::iterator metadata_it = _connection_list.find(id);
+		if (metadata_it == _connection_list.end()) {
+			std::cout << "> No connection found with id " << id << std::endl;
+			return;
+		}
+
+		_client.close(metadata_it->second->get_hdl(), code, reason, ec);
+		if (ec) {
+			std::cout << "> Error initiating close: " << ec.message() << std::endl;
+		}
+	}
+
+	ConnectionMetadata::ptr get_metadata(int id) const
+	{
+		connection_list::const_iterator metadata_it = _connection_list.find(id);
+		if (metadata_it == _connection_list.end()) {
+			return ConnectionMetadata::ptr();
+		}
+		else {
+			return metadata_it->second;
+		}
+	}
+
+	void send_binary(int id, void* data, int size)
+	{
+		auto metadata_it = _connection_list.find(id);
+		if (metadata_it == _connection_list.end()) {
+			std::cout << "> No connection found with id " << id << std::endl;
+			return;
+		}
+
+		_client.send(metadata_it->second->get_hdl(), data, size, websocketpp::frame::opcode::BINARY);
+	}
+
+	void send_text(int id, const std::string &message)
+	{
+		auto metadata_it = _connection_list.find(id);
+		if (metadata_it == _connection_list.end()) {
+			std::cout << "> No connection found with id " << id << std::endl;
+			return;
+		}
+
+		_client.send(metadata_it->second->get_hdl(), message, websocketpp::frame::opcode::TEXT);
+	}
+
+	void send_image(int id, const ImageInfo &info, const std::vector<uint8_t> &frame)
+	{
+		auto buffer_size = sizeof(ImageInfo) + frame.size();
+		auto *buffer = new uint8_t[buffer_size];
+		memcpy_s(buffer, buffer_size, (void*)&info, sizeof(info));
+		memcpy_s(buffer + sizeof(info), buffer_size - sizeof(info), frame.data(), frame.size());
+		send_binary(id, buffer, buffer_size);
+	}
+
+private:
+	using connection_list = std::map<int, ConnectionMetadata::ptr>;
+
+	client _client;
+	websocketpp::lib::shared_ptr<websocketpp::lib::thread> _thread;
+
+	connection_list _connection_list;
+	int _next_id;
+};
 
 int main(void)
 {
-	// Socket init
-	struct sockaddr_in address;
-	SOCKET sock;
-	WSADATA wsa;
+	StreamClient c;
 
-	// Initialise winsock
-	std::cout << "Initialising Winsock..." << std::endl;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-	{
-		std::cout << "Failed. Error Code : " << WSAGetLastError() << std::endl;
-		exit(EXIT_FAILURE);
+	std::stringstream ss;
+	ss << "ws://" << server_address << ":" << server_port;
+	auto id = c.connect(ss.str());
+	if (id < 0) {
+		return -1;
 	}
-	std::cout << "Initialised." << std::endl;
-
-	//create socket
-	if ((sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == SOCKET_ERROR)
-	{
-		std::cout << "socket() failed with error code : " << WSAGetLastError() << std::endl;
-		exit(EXIT_FAILURE);
-	}
-
-	//setup address structure
-	memset((char *)&address, 0, sizeof(address));
-	address.sin_family = AF_INET;
-	address.sin_port = htons(server_port);
-	inet_pton(AF_INET, server_address, &address.sin_addr);
 
 	// GLFW
 	GLFWwindow* window;
 	glfwSetErrorCallback(error_callback);
 	if (!glfwInit())
 		exit(EXIT_FAILURE);
-	window = glfwCreateWindow(640, 480, "Test Window", nullptr, nullptr);
+	window = glfwCreateWindow(width_start, height_start, "Test Window", nullptr, nullptr);
 	if (!window)
 	{
 		glfwTerminate();
@@ -156,6 +357,7 @@ int main(void)
 
 	// Main loop
 	std::vector<uint8_t> frame;
+	ImageInfo info;
 	int count = 0;
 	while (!glfwWindowShouldClose(window))
 	{
@@ -217,33 +419,19 @@ int main(void)
 		glPixelStorei(GL_PACK_ALIGNMENT, 1);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
 		glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, (void*)frame.data());
-		/*std::stringstream ss;
-		ss << "image_";
-		ss << count++;
-		ss << ".data";
-		save_image(frame, info, ss.str());*/
-
-		send_to_udp(sock, address, start_message, strlen(start_message));
-		ImageInfo info;
 		info.width = width;
 		info.height = height;
-		info.depth = 3;
-		send_to_udp(sock, address, (char*)&info, sizeof(ImageInfo));
-		/*frame.clear();
-		frame << std::string("0123456789");*/
-		
-		if (send_to_udp(sock, address, (char*)frame.data(), frame.size()) == SOCKET_ERROR)
-		{
-			std::cout << "send_to_udp() failed with error code : " << WSAGetLastError() << std::endl;
-			glfwSetWindowShouldClose(window, GL_TRUE);
-		}
-		send_to_udp(sock, address, end_message, strlen(end_message));
+		info.depth = bitdepth;
+
+		std::stringstream sss;
+		sss << "Frame number : " << count++;
+		c.send_text(id, sss.str());
+
+		c.send_image(id, info, frame);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
-	send_to_udp(sock, address, end_message, strlen(end_message));
-	send_to_udp(sock, address, close_connection_message, strlen(close_connection_message));
 
 	glDeleteBuffers(1, &depthBuffer);
 	glDeleteTextures(1, &texColorBuffer);
