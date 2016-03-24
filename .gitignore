@@ -1,8 +1,10 @@
 TestWindow/Debug/
+TestWindow/Release/
 Streamer/Debug/
-Streamer/x64/Debug/Streamer.tlog/link.write.1.tlog
+Streamer/Release/
 *.opensdf
 *.sdf
 Streamer/x64/
 *.opendb
 Release/
+3rdparty/
