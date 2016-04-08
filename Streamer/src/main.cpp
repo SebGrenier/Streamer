@@ -1,4 +1,5 @@
 #include "streamer.h"
+#include "strategies/FileStreamingStrategy.h"
 
 #include <iostream>
 #include <vector>
@@ -20,6 +21,7 @@ constexpr short server_port = 12345;
 int count = 0;
 
 Streamer streamer;
+FileStreamingStrategy file_streaming_strategy("test.mp4");
 
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
@@ -56,38 +58,6 @@ void save_image(const std::vector<uint8_t> image, const ImageInfo &image_info, c
 	}
 }
 
-void receive_image(SOCKET s, sockaddr_in address)
-{
-	int address_size = sizeof(address);
-	ImageInfo info;
-	int total_received = 0;
-	auto recv_len = recvfrom(s, (char*)&info, sizeof(ImageInfo), 0, (sockaddr *)&address, &address_size);
-	int buffer_size = info.width * info.height * info.depth;
-
-	std::cout << "Received image info: " << info << std::endl;
-
-	char buffer[max_buffer_size];
-	std::vector<uint8_t> image;
-	image.reserve(buffer_size);
-	while(total_received < buffer_size) {
-		recv_len = recvfrom(s, buffer, max_buffer_size, 0, (sockaddr *)&address, &address_size);
-		if (recv_len == SOCKET_ERROR) {
-			std::cout << "recvfrom() failed with error code : " << WSAGetLastError() << std::endl;
-			return;
-		}
-
-		if (_strcmpi(buffer, "end_image") == 0) {
-			std::cout << "Error: received end message before end of buffer" << std::endl;
-			return;
-		}
-
-		image.insert(image.end(), buffer, buffer + recv_len);
-		total_received += recv_len;
-	}
-
-	
-}
-
 void on_http(server* s, websocketpp::connection_hdl hdl) {
 	server::connection_ptr con = s->get_con_from_hdl(hdl);
 
@@ -104,10 +74,17 @@ void on_fail(server* s, websocketpp::connection_hdl hdl) {
 	server::connection_ptr con = s->get_con_from_hdl(hdl);
 
 	std::cout << "Fail handler: " << con->get_ec() << " " << con->get_ec().message() << std::endl;
+
+	if (streamer.stream_opened()) {
+		streamer.close_stream();
+	}
 }
 
 void on_close(websocketpp::connection_hdl) {
 	std::cout << "Close handler" << std::endl;
+	if (streamer.stream_opened()) {
+		streamer.close_stream();
+	}
 }
 
 // Define a callback to handle incoming messages
@@ -115,9 +92,9 @@ void on_message(server* s, websocketpp::connection_hdl hdl, msg_ptr msg) {
 	auto opcode = msg->get_opcode();
 
 	if (opcode == websocketpp::frame::opcode::TEXT) {
-		std::cout << "on_message called with hdl: " << hdl.lock().get()
+		/*std::cout << "on_message called with hdl: " << hdl.lock().get()
 			<< " and message: " << msg->get_payload()
-			<< std::endl;
+			<< std::endl;*/
 	} else if (opcode == websocketpp::frame::opcode::BINARY) {
 		auto &payload = msg->get_payload();
 		if (payload.size() <= sizeof(ImageInfo)) {
@@ -132,12 +109,18 @@ void on_message(server* s, websocketpp::connection_hdl hdl, msg_ptr msg) {
 		frame.resize(frame_size);
 		memcpy_s(frame.data(), frame_size, payload.data() + sizeof(info), payload.size() - sizeof(info));
 
-		//// Image is complete. Save it.
-		//std::stringstream ss;
-		//ss << "image_";
-		//ss << count++;
-		//ss << ".data";
-		//save_image(frame, info, ss.str());
+		StreamingInfo stream_info;
+		stream_info.width = info.width;
+		stream_info.height = info.height;
+		if (streamer.stream_opened() && stream_info != streamer.streaming_info()) {
+			streamer.close_stream();
+		}
+
+		if (!streamer.stream_opened()) {
+			streamer.open_stream(info.width, info.height, &file_streaming_strategy);
+		}
+
+		streamer.stream_frame(frame.data(), frame.size());
 	}
 }
 

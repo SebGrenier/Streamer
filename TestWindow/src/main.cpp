@@ -160,7 +160,7 @@ std::ostream & operator<< (std::ostream & out, ConnectionMetadata const & data)
 class StreamClient
 {
 public:
-	StreamClient() 
+	StreamClient()
 		: _next_id(0)
 	{
 		_client.clear_access_channels(websocketpp::log::alevel::all);
@@ -376,7 +376,7 @@ int main(void)
 		glOrtho(-ratio, ratio, -1.f, 1.f, 1.f, -1.f);
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
-		//glRotatef((float)glfwGetTime() * 50.f, 0.f, 0.f, 1.f);
+		glRotatef((float)glfwGetTime() * 50.f, 0.f, 0.f, 1.f);
 		glBegin(GL_TRIANGLES);
 		glColor3f(1.f, 0.f, 0.f);
 		glVertex3f(-0.6f, -0.4f, 0.f);

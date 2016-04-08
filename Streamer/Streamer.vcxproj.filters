@@ -19,6 +19,12 @@
     <Filter Include="Header Files\src">
       <UniqueIdentifier>{e92b07e9-3e19-4725-85dc-2b947d0de5a2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\src\Strategies">
+      <UniqueIdentifier>{996038aa-720c-4de0-8cf1-38fbedf7d805}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\Strategies">
+      <UniqueIdentifier>{32f95d2a-67a7-4058-98d9-ce48537c6276}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -27,10 +33,25 @@
     <ClCompile Include="src\streamer.cpp">
       <Filter>Source Files\src</Filter>
     </ClCompile>
+    <ClCompile Include="src\strategies\RTPStreamingStrategy.cpp">
+      <Filter>Source Files\src\Strategies</Filter>
+    </ClCompile>
+    <ClCompile Include="src\strategies\FileStreamingStrategy.cpp">
+      <Filter>Source Files\src\Strategies</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\streamer.h">
       <Filter>Header Files\src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\strategies\IStreamingStrategy.h">
+      <Filter>Header Files\src\Strategies</Filter>
+    </ClInclude>
+    <ClInclude Include="src\strategies\FileStreamingStrategy.h">
+      <Filter>Header Files\src\Strategies</Filter>
+    </ClInclude>
+    <ClInclude Include="src\strategies\RTPStreamingStrategy.h">
+      <Filter>Header Files\src\Strategies</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
