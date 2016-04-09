@@ -133,14 +133,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\strategies\FileStreamingStrategy.cpp" />
-    <ClCompile Include="src\strategies\RTPStreamingStrategy.cpp" />
     <ClCompile Include="src\streamer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\strategies\FileStreamingStrategy.h" />
-    <ClInclude Include="src\strategies\IStreamingStrategy.h" />
-    <ClInclude Include="src\strategies\RTPStreamingStrategy.h" />
     <ClInclude Include="src\streamer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

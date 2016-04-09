@@ -1,5 +1,4 @@
 #include "streamer.h"
-#include "strategies/FileStreamingStrategy.h"
 
 #include <iostream>
 #include <vector>
@@ -21,10 +20,23 @@ constexpr short server_port = 12345;
 int count = 0;
 
 Streamer streamer;
-FileStreamingStrategy file_streaming_strategy("test.mp4");
 
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
+
+struct StreamingStrategy
+{
+	std::string format;
+	std::string path;
+
+	StreamingStrategy(const std::string &&_format, const std::string &&_path)
+		: format(_format)
+		, path(_path)
+	{}
+};
+
+StreamingStrategy file_strategy("mp4", "test.mp4");
+StreamingStrategy rtsp_strategy("rtsp", "rtsp://127.0.0.1:54321/live.sdp");
 
 struct ImageInfo
 {
@@ -117,10 +129,12 @@ void on_message(server* s, websocketpp::connection_hdl hdl, msg_ptr msg) {
 		}
 
 		if (!streamer.stream_opened()) {
-			streamer.open_stream(info.width, info.height, &file_streaming_strategy);
+			streamer.open_stream(info.width, info.height, rtsp_strategy.format, rtsp_strategy.path);
 		}
 
-		streamer.stream_frame(frame.data(), frame.size());
+		if (streamer.stream_opened()) {
+			streamer.stream_frame(frame.data(), info.width, info.height);
+		}
 	}
 }
 
@@ -152,7 +166,7 @@ int main(int argc, char **argv)
 
 		serv.set_validate_handler(bind(&validate, &serv, std::placeholders::_1));
 
-		// Listen on port 9012
+		// Listen on port
 		serv.listen(server_port);
 
 		// Start the server accept loop

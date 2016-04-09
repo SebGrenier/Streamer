@@ -24,15 +24,6 @@ constexpr int width_start = 640;
 constexpr int height_start = 480;
 constexpr int bitdepth = 3;
 
-bool send_udp_check(int status)
-{
-	if (status == SOCKET_ERROR) {
-		std::cout << "send_to_udp() failed with error code : " << WSAGetLastError() << std::endl;
-		return false;
-	}
-	return true;
-}
-
 std::vector<uint8_t>& operator << (std::vector<uint8_t> &vec, std::string &string)
 {
 	for(auto &c : string) {
@@ -290,6 +281,7 @@ public:
 		memcpy_s(buffer, buffer_size, (void*)&info, sizeof(info));
 		memcpy_s(buffer + sizeof(info), buffer_size - sizeof(info), frame.data(), frame.size());
 		send_binary(id, buffer, buffer_size);
+		delete[] buffer;
 	}
 
 private:
