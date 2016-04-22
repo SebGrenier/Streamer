@@ -11,6 +11,10 @@ extern "C"
 
 #include <iostream>
 
+using critical_section_holder = std::lock_guard<std::mutex>;
+
+constexpr long long frame_rate = (long long)(1.0f / 60.0f * 1000.0f);
+
 int round_to_higher_multiple_of_two(int value)
 {
 	return (value & 0x01) ? value + 1 : value;
@@ -54,6 +58,8 @@ Streamer::Streamer()
 	, _initialized(false)
 	, _stream_opened(false)
 	, _frame_counter(0)
+	, _quit_thread(false)
+	, _streamer_thread(nullptr)
 {}
 
 Streamer::~Streamer()
@@ -95,7 +101,7 @@ void Streamer::shutdown()
 }
 
 
-bool Streamer::open_stream(int width, int height, const std::string &format, const std::string &path)
+bool Streamer::open_stream(int width, int height, short depth, const std::string &format, const std::string &path)
 {
 	_frame_counter = 0;
 
@@ -138,7 +144,7 @@ bool Streamer::open_stream(int width, int height, const std::string &format, con
 	_scale_context = sws_getContext(
 		width, // src width
 		height, // src height
-		AV_PIX_FMT_RGB24, // src format
+		depth == 3 ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_RGBA, // src format
 		codec_context->width, // dest width
 		codec_context->height, // dest height
 		AV_PIX_FMT_YUV420P, // dest format
@@ -154,25 +160,23 @@ bool Streamer::open_stream(int width, int height, const std::string &format, con
 
 	_streaming_info.height = height;
 	_streaming_info.width = width;
+	_streaming_info.depth = depth;
+	_current_frame.info = _streaming_info;
+	_current_frame.data.resize(width * height * depth, 0);
+
+	_quit_thread = false;
+
+	_streamer_thread = new std::thread(&Streamer::run_thread, this);
+
 	_stream_opened = true;
 	return true;
 }
 
 void Streamer::close_stream()
 {
-	/* get the delayed frames */
-	auto got_packet = 0;
-	do {
-		got_packet = encode_frame(nullptr, _video_stream->codec);
-	} while (got_packet);
-
-	av_write_trailer(_format_context);
-
-	if (!(_format_context->flags & AVFMT_NOFILE)) {
-		/* Close the output. */
-		avio_closep(&_format_context->pb);
-	}
-
+	_quit_thread = true;
+	_streamer_thread->join();
+	delete _streamer_thread;
 
 	avformat_free_context(_format_context);
 	avcodec_close(_video_stream->codec);
@@ -184,35 +188,12 @@ void Streamer::close_stream()
 	}
 }
 
-void Streamer::stream_frame(const uint8_t* frame, int width, int height)
+void Streamer::stream_frame(const uint8_t* frame, int width, int height, short depth)
 {
-	AVFrame* inpic = av_frame_alloc(); // mandatory frame allocation
-	inpic->format = AV_PIX_FMT_RGB24;
-	inpic->width = _video_stream->codec->width;
-	inpic->height = _video_stream->codec->height;
-	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, AV_PIX_FMT_RGB24, width, height, 32);
-	if (success < 0) {
-		std::cout << "Error transforming data into frame" << std::endl;
-		av_frame_free(&inpic);
-		return;
+	{
+		critical_section_holder holder(_frame_mutex);
+		std::copy(frame, frame + width * height * depth, _current_frame.data.begin());
 	}
-
-	AVFrame* outpic = av_frame_alloc();
-	outpic->format = AV_PIX_FMT_YUV420P;
-	outpic->width = _video_stream->codec->width;
-	outpic->height = _video_stream->codec->height;
-	//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
-	//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
-	outpic->pts = _frame_counter++;
-	av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
-
-	sws_scale(_scale_context, inpic->data, inpic->linesize, 0, _video_stream->codec->height, outpic->data, outpic->linesize);          // converting frame size and format
-
-	encode_frame(outpic, _video_stream->codec);
-
-	av_freep(&outpic->data[0]);
-	av_frame_free(&inpic);
-	av_frame_free(&outpic);
 }
 
 bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream *stream, int width, int height) const
@@ -279,3 +260,58 @@ int Streamer::encode_frame(AVFrame *frame, AVCodecContext *context) const
 
 	return got_packet;
 }
+
+void Streamer::run_thread()
+{
+	while(!_quit_thread) {
+		AVFrame* inpic = av_frame_alloc(); // mandatory frame allocation
+
+		{
+			std::lock_guard<std::mutex> critical_section(_frame_mutex);
+
+			inpic->format = AV_PIX_FMT_RGB24;
+			inpic->width = _video_stream->codec->width;
+			inpic->height = _video_stream->codec->height;
+			auto success = av_image_fill_arrays(inpic->data, inpic->linesize, _current_frame.data.data(), AV_PIX_FMT_RGB24, _current_frame.info.width, _current_frame.info.height, 32);
+			if (success < 0) {
+				std::cout << "Error transforming data into frame" << std::endl;
+				av_frame_free(&inpic);
+				return;
+			}
+		}
+
+		AVFrame* outpic = av_frame_alloc();
+		outpic->format = AV_PIX_FMT_YUV420P;
+		outpic->width = _video_stream->codec->width;
+		outpic->height = _video_stream->codec->height;
+		//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
+		//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
+		outpic->pts = _frame_counter++;
+		av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
+
+		sws_scale(_scale_context, inpic->data, inpic->linesize, 0, _video_stream->codec->height, outpic->data, outpic->linesize);          // converting frame size and format
+
+		encode_frame(outpic, _video_stream->codec);
+
+		av_freep(&outpic->data[0]);
+		av_frame_free(&inpic);
+		av_frame_free(&outpic);
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(frame_rate));
+	}
+
+	/* get the delayed frames */
+	int got_packet;
+	do {
+		got_packet = encode_frame(nullptr, _video_stream->codec);
+	} while (got_packet);
+
+	av_write_trailer(_format_context);
+
+	if (!(_format_context->flags & AVFMT_NOFILE)) {
+		/* Close the output. */
+		avio_closep(&_format_context->pb);
+	}
+
+}
+

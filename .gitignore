@@ -8,3 +8,4 @@ Streamer/x64/
 *.opendb
 Release/
 3rdparty/
+*.db

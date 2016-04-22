@@ -20,8 +20,8 @@ constexpr const char* server_address = "127.0.0.1";
 constexpr short server_port = 12345;
 constexpr int max_buffer_size = 63 * 1024;
 
-constexpr int width_start = 640;
-constexpr int height_start = 480;
+constexpr int width_start = 1280;
+constexpr int height_start = 720;
 constexpr int bitdepth = 3;
 
 std::vector<uint8_t>& operator << (std::vector<uint8_t> &vec, std::string &string)
@@ -329,7 +329,7 @@ int main(void)
 	GLuint texColorBuffer;
 	glGenTextures(1, &texColorBuffer);
 	glBindTexture(GL_TEXTURE_2D, texColorBuffer);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_start, height_start, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColorBuffer, 0);
@@ -337,7 +337,7 @@ int main(void)
 	GLuint depthBuffer;
 	glGenRenderbuffers(1, &depthBuffer);
 	glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 640, 480);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width_start, height_start);
 	glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
 
 	GLenum status = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT);
@@ -393,13 +393,13 @@ int main(void)
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
 		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 1.0f);
-		glVertex3f(-1.0f, 1.0f, 0.f);
-		glTexCoord2f(1.0f, 1.0f);
-		glVertex3f(1.0f, 1.0f, 0.f);
-		glTexCoord2f(1.0f, 0.0f);
-		glVertex3f(1.0f, -1.0f, 0.f);
 		glTexCoord2f(0.0f, 0.0f);
+		glVertex3f(-1.0f, 1.0f, 0.f);
+		glTexCoord2f(1.0f, 0.0f);
+		glVertex3f(1.0f, 1.0f, 0.f);
+		glTexCoord2f(1.0f, 1.0f);
+		glVertex3f(1.0f, -1.0f, 0.f);
+		glTexCoord2f(0.0f, 1.0f);
 		glVertex3f(-1.0f, -1.0f, 0.f);
 		glEnd();
 		glPopAttrib();
@@ -407,7 +407,7 @@ int main(void)
 
 		glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer_id);
 		frame.clear();
-		frame.resize(width * height * 3);
+		frame.resize(width * height * bitdepth);
 		glPixelStorei(GL_PACK_ALIGNMENT, 1);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
 		glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, (void*)frame.data());

@@ -37,6 +37,7 @@ struct StreamingStrategy
 
 StreamingStrategy file_strategy("mp4", "test.mp4");
 StreamingStrategy rtsp_strategy("rtsp", "rtsp://127.0.0.1:54321/live.sdp");
+StreamingStrategy mpegts_strategy("mpegts", "udp://127.0.0.1:54321");
 
 struct ImageInfo
 {
@@ -129,11 +130,11 @@ void on_message(server* s, websocketpp::connection_hdl hdl, msg_ptr msg) {
 		}
 
 		if (!streamer.stream_opened()) {
-			streamer.open_stream(info.width, info.height, rtsp_strategy.format, rtsp_strategy.path);
+			streamer.open_stream(info.width, info.height, info.depth, mpegts_strategy.format, mpegts_strategy.path);
 		}
 
 		if (streamer.stream_opened()) {
-			streamer.stream_frame(frame.data(), info.width, info.height);
+			streamer.stream_frame(frame.data(), info.width, info.height, info.depth);
 		}
 	}
 }
