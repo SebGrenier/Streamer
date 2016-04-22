@@ -1,7 +1,25 @@
 <html>
+<head>
+  <link href="http://vjs.zencdn.net/5.9.2/video-js.css" rel="stylesheet">
+
+  <!-- If you'd like to support IE8 -->
+  <script src="http://vjs.zencdn.net/ie8/1.1.2/videojs-ie8.min.js"></script>
+  
+  <script src="http://p.jwpcdn.com/6/9/jwplayer.js" ></script>
+</head>
 <body>
-<video src="udp://127.0.0.1:54321">
+<video id="example_video_1" class="video-js vjs-default-skin" controls preload="none" width="1280" height="720">
     Your browser does not support the VIDEO tag and/or RTP streams.
+	<source src="rtsp://127.0.0.1:54321/live.sdp" type='rtsp/mp4'/>
 </video>
+
+<div id=myElement></div>
+<script>
+        jwplayer("myElement").setup({
+            file: "http://localhost/udp/127.0.0.1:54321",
+            height: 720,
+            width: 1280
+        });
+</script>
 </body>
 </html>

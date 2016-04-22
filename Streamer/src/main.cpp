@@ -37,6 +37,7 @@ struct StreamingStrategy
 
 StreamingStrategy file_strategy("mp4", "test.mp4");
 StreamingStrategy rtsp_strategy("rtsp", "rtsp://127.0.0.1:54321/live.sdp");
+StreamingStrategy rtmp_strategy("rtmp", "rtmp://127.0.0.1:54321/live.sdp");
 StreamingStrategy mpegts_strategy("mpegts", "udp://127.0.0.1:54321");
 
 struct ImageInfo
