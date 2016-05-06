@@ -6,6 +6,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "freetype/freetype_utils.h"
+
 // The ASIO_STANDALONE define is necessary to use the standalone version of Asio.
 // Remove if you are using Boost Asio.
 //#define ASIO_STANDALONE
@@ -294,6 +296,22 @@ private:
 	int _next_id;
 };
 
+std::vector<uint8_t> flip_frame(const std::vector<uint8_t> &original, int width, int height, int depth)
+{
+	std::vector<uint8_t> flipped_frame;
+	flipped_frame.reserve(original.size());
+	const int row_size = width * depth;
+	int index = 0;
+	for (int y = height - 1; y >= 0; --y) {
+		index = y * row_size;
+		for (int x = 0; x < row_size; ++x) {
+			flipped_frame.push_back(original[index]);
+			++index;
+		}
+	}
+	return flipped_frame;
+}
+
 int main(void)
 {
 	StreamClient c;
@@ -347,6 +365,10 @@ int main(void)
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// This Holds All The Information For The Font That We Are Going To Create.
+	freetype::font_data our_font;
+	our_font.init("C:/Windows/Fonts/Arial.ttf", 16);
+
 	// Main loop
 	std::vector<uint8_t> frame;
 	ImageInfo info;
@@ -365,9 +387,10 @@ int main(void)
 		glClear(GL_COLOR_BUFFER_BIT);
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
-		glOrtho(-ratio, ratio, -1.f, 1.f, 1.f, -1.f);
+		glOrtho(-ratio, ratio, -1.f, 1.f, -1.f, 1.f);
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
+		glPushMatrix();
 		glRotatef((float)glfwGetTime() * 50.f, 0.f, 0.f, 1.f);
 		glBegin(GL_TRIANGLES);
 		glColor3f(1.f, 0.f, 0.f);
@@ -377,7 +400,10 @@ int main(void)
 		glColor3f(0.f, 0.f, 1.f);
 		glVertex3f(0.f, 0.6f, 0.f);
 		glEnd();
+		glPopMatrix();
 		glPopAttrib();
+
+		freetype::print(our_font, 320, 200, "Frame number : %i", count);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		// Draw the texture
@@ -393,13 +419,13 @@ int main(void)
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
 		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f);
-		glVertex3f(-1.0f, 1.0f, 0.f);
-		glTexCoord2f(1.0f, 0.0f);
-		glVertex3f(1.0f, 1.0f, 0.f);
-		glTexCoord2f(1.0f, 1.0f);
-		glVertex3f(1.0f, -1.0f, 0.f);
 		glTexCoord2f(0.0f, 1.0f);
+		glVertex3f(-1.0f, 1.0f, 0.f);
+		glTexCoord2f(1.0f, 1.0f);
+		glVertex3f(1.0f, 1.0f, 0.f);
+		glTexCoord2f(1.0f, 0.0f);
+		glVertex3f(1.0f, -1.0f, 0.f);
+		glTexCoord2f(0.0f, 0.0f);
 		glVertex3f(-1.0f, -1.0f, 0.f);
 		glEnd();
 		glPopAttrib();
@@ -419,7 +445,7 @@ int main(void)
 		sss << "Frame number : " << count++;
 		c.send_text(id, sss.str());
 
-		c.send_image(id, info, frame);
+		c.send_image(id, info, flip_frame(frame, width, height, bitdepth));
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();

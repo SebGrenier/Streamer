@@ -16,10 +16,24 @@
     <Filter Include="Source Files\src">
       <UniqueIdentifier>{e921cc32-ceee-4a58-ac4d-1742a1d23a32}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\freetype">
+      <UniqueIdentifier>{9c6ad686-5b09-40cc-9124-55ad22cdb279}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\freetype">
+      <UniqueIdentifier>{4f987d43-2108-42a1-b109-9824b7452661}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files\src</Filter>
     </ClCompile>
+    <ClCompile Include="src\freetype\freetype_utils.cpp">
+      <Filter>Source Files\src\freetype</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\freetype\freetype_utils.h">
+      <Filter>Header Files\freetype</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
