@@ -9,3 +9,6 @@ Streamer/x64/
 Release/
 3rdparty/
 *.db
+TestWindow/x64/
+Decoder/x64/
+Decoder/Debug/
