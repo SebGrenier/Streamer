@@ -17,12 +17,10 @@ EXPORTS
     av_aes_size DATA
     av_append_path_component
     av_asprintf
-    av_assert0_fpu
     av_audio_fifo_alloc
     av_audio_fifo_drain
     av_audio_fifo_free
     av_audio_fifo_peek
-    av_audio_fifo_peek_at
     av_audio_fifo_read
     av_audio_fifo_realloc
     av_audio_fifo_reset
@@ -58,7 +56,6 @@ EXPORTS
     av_buffer_make_writable
     av_buffer_pool_get
     av_buffer_pool_init
-    av_buffer_pool_init2
     av_buffer_pool_uninit
     av_buffer_realloc
     av_buffer_ref
@@ -233,17 +230,6 @@ EXPORTS
     av_hmac_free
     av_hmac_init
     av_hmac_update
-    av_hwdevice_ctx_alloc
-    av_hwdevice_ctx_create
-    av_hwdevice_ctx_init
-    av_hwdevice_get_hwframe_constraints
-    av_hwdevice_hwconfig_alloc
-    av_hwframe_constraints_free
-    av_hwframe_ctx_alloc
-    av_hwframe_ctx_init
-    av_hwframe_get_buffer
-    av_hwframe_transfer_data
-    av_hwframe_transfer_get_formats
     av_i2int
     av_image_alloc
     av_image_check_sar
@@ -266,7 +252,6 @@ EXPORTS
     av_log2_i
     av_log_default_callback
     av_log_format_line
-    av_log_format_line2
     av_log_get_flags
     av_log_get_level
     av_log_set_callback
@@ -275,8 +260,6 @@ EXPORTS
     av_lzo1x_decode
     av_malloc
     av_mallocz
-    av_mastering_display_metadata_alloc
-    av_mastering_display_metadata_create_side_data
     av_match_list
     av_match_name
     av_max_alloc
@@ -404,8 +387,6 @@ EXPORTS
     av_small_strptime
     av_stereo3d_alloc
     av_stereo3d_create_side_data
-    av_stereo3d_from_name
-    av_stereo3d_type_name
     av_strcasecmp
     av_strdup
     av_strerror
@@ -468,7 +449,6 @@ EXPORTS
     av_xtea_le_init
     avpriv_alloc_fixed_dsp
     avpriv_cga_font DATA
-    avpriv_dict_set_timestamp
     avpriv_float_dsp_alloc
     avpriv_frame_get_metadatap
     avpriv_get_gamma_from_trc
@@ -480,7 +460,6 @@ EXPORTS
     avpriv_scalarproduct_float_c
     avpriv_set_systematic_pal2
     avpriv_solve_lls
-    avpriv_tempfile
     avpriv_vga16_font DATA
     avutil_configuration
     avutil_license

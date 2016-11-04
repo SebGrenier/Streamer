@@ -35,10 +35,13 @@ struct StreamingStrategy
 	{}
 };
 
-StreamingStrategy file_strategy("mp4", "test.mp4");
+StreamingStrategy file_strategy("mp4", "../../HTML5/live/video.mp4");
 StreamingStrategy rtsp_strategy("rtsp", "rtsp://127.0.0.1:54321/live.sdp");
 StreamingStrategy rtmp_strategy("rtmp", "rtmp://127.0.0.1:54321/live.sdp");
 StreamingStrategy mpegts_strategy("mpegts", "udp://127.0.0.1:54321");
+StreamingStrategy http_strategy("hls", "../../HTML5/live/index.m3u8");
+StreamingStrategy dash_strategy("stream_segment", "../../HTML5/live/video.mp4");
+auto &current_strategy = mpegts_strategy;
 
 struct ImageInfo
 {
@@ -131,7 +134,7 @@ void on_message(server* s, websocketpp::connection_hdl hdl, msg_ptr msg) {
 		}
 
 		if (!streamer.stream_opened()) {
-			streamer.open_stream(info.width, info.height, info.depth, mpegts_strategy.format, mpegts_strategy.path);
+			streamer.open_stream(info.width, info.height, info.depth, current_strategy.format, current_strategy.path);
 		}
 
 		if (streamer.stream_opened()) {

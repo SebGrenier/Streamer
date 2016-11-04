@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <vector>
+#include <websocketpp/transport/base/connection.hpp>
 
 struct AVFrame;
 struct SwsContext;
@@ -11,6 +12,8 @@ struct AVCodec;
 struct AVCodecContext;
 struct AVFormatContext;
 struct AVStream;
+struct AVPacket;
+struct AVRational;
 
 struct StreamingInfo
 {
@@ -45,10 +48,16 @@ public:
 	bool stream_opened() const { return _stream_opened; }
 
 	const StreamingInfo& streaming_info() const { return _streaming_info; }
+
+	void send_frame_ws(AVPacket *pkt);
+	void send_packet_buffer(void* buffer, int size);
 private:
 	bool initialize_codec_context(AVCodecContext *codec_context, AVStream *stream, int width, int height) const;
-	int encode_frame(AVFrame *frame, AVCodecContext *context) const;
-	void run_thread();
+	int encode_frame(AVFrame *frame, AVCodecContext *context);
+	void run_encoding_thread();
+	void run_websocket_thread();
+
+	int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt);
 
 	SwsContext *_scale_context;
 	AVCodec *_codec;
@@ -62,6 +71,10 @@ private:
 
 	FrameInfo _current_frame;
 	std::thread *_streamer_thread;
+	std::thread *_ws_thread;
 	std::mutex _frame_mutex;
 	std::atomic<bool> _quit_thread;
+
+	std::mutex _connection_mutex;
+	std::vector<websocketpp::connection_hdl> _connections;
 };
