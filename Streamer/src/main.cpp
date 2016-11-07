@@ -41,7 +41,8 @@ StreamingStrategy rtmp_strategy("rtmp", "rtmp://127.0.0.1:54321/live.sdp");
 StreamingStrategy mpegts_strategy("mpegts", "udp://127.0.0.1:54321");
 StreamingStrategy http_strategy("hls", "../../HTML5/live/index.m3u8");
 StreamingStrategy dash_strategy("stream_segment", "../../HTML5/live/video.mp4");
-auto &current_strategy = mpegts_strategy;
+StreamingStrategy raw_h264_strategy("h264", "video.h264");
+auto &current_strategy = raw_h264_strategy;
 
 struct ImageInfo
 {
