@@ -7,7 +7,7 @@ var _utf8Decoder = new TextDecoder("utf-8");
 // WebGL
 var canvas = document.querySelector('canvas');
 var gl = null;
-var _width = 0, _height = 0;
+var _width = 1280, _height = 720;
 var _viewportTextureId = null;
 var _uSamplerLocation = null;
 var _uSwizzleLocation = null;
@@ -109,12 +109,9 @@ function _writeFrame(image) {
     if (_width !== image.width || _height !== image.height) {
         canvas.width = _width = image.width;
         canvas.height = _height = image.height;
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
     }
-    var imageBytes = new Uint8Array(image.blob);
     gl.bindTexture(gl.TEXTURE_2D, _viewportTextureId);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, imageBytes);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, image.blob);
 
     requestAnimationFrame(_renderViewport);
 }
@@ -134,24 +131,158 @@ function _renderViewport() {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
-_initWebGL();
-_initBuffers();
-_initShaders();
-_initScene();
+// _initWebGL();
+// _initBuffers();
+// _initShaders();
+// _initScene();
 
 // Broadway
-var avc = new Decoder({rgb: true});
-avc.onPictureDecoded = function (buffer, width, height) {
-    _writeFrame({blob: buffer, width: width, height: height});
-};
+var NalFrame = function () {
+    this.packets = [];
+    this.totalSize = 0;
+}
+NalFrame.prototype.addPacket = function (packet) {
+    this.packets.push(packet);
+    this.totalSize += packet.length;
+}
+NalFrame.prototype.getFrame = function () {
+    var buf = new Uint8Array(this.totalSize);
+    var index = 0;
+    for (var packet of this.packets) {
+        buf.set(packet, index);
+        index += packet.length;
+    }
+    return buf;
+}
+
+// var isDecoding = false;
+// var nalFrames = []
+// var avc = new Decoder({rgb: true});
+// avc.onPictureDecoded = function (buffer, width, height) {
+//     _writeFrame({blob: buffer, width: width, height: height});
+// };
+
+function H264Player(){
+    console.log('using', this);
+    var p = new Player({
+        useWorker: true,
+        workerFile: "Decoder.js",
+    });
+
+    document.body.appendChild(p.canvas);
+    var parser = new nalParser(p);
+    this.play = function(buffer){
+        parser.parse(buffer);
+    };
+}
+
+var h264p = new H264Player();
+
+function nalParser(player){
+    var bufferAr = [];
+    var concatUint8 = function(parAr) {
+        if (!parAr || !parAr.length){
+            return new Uint8Array(0);
+        };
+
+        if (parAr.length === 1){
+            return parAr[0];
+        };
+
+        var completeLength = 0;
+        var i = 0;
+        var l = parAr.length;
+        for (i; i < l; ++i){
+            completeLength += parAr[i].byteLength;
+        };
+
+        var res = new Uint8Array(completeLength);
+        var filledLength = 0;
+
+        for (i = 0; i < l; ++i){
+            res.set(new Uint8Array(parAr[i]), filledLength);
+            filledLength += parAr[i].byteLength;
+        };
+        return res;
+    };
+    this.parse = function(buffer){
+        if (!(buffer && buffer.byteLength)){
+            return;
+        };
+        var data = new Uint8Array(buffer);
+        var hit = function(subarray){
+            if (subarray){
+                bufferAr.push(subarray);
+            };
+            var buff = concatUint8(bufferAr);
+            player.decode(buff);
+            bufferAr = [];
+        };
+
+        var b = 0;
+        var lastStart = 0;
+
+        var l = data.length;
+        var zeroCnt = 0;
+
+        for (b = 0; b < l; ++b){
+            if (data[b] === 0){
+                zeroCnt++;
+            }else{
+                if (data[b] == 1){
+                    if (zeroCnt >= 3){
+                        if (lastStart < b - 3){
+                            hit(data.subarray(lastStart, b - 3));
+                            lastStart = b - 3;
+                        }else if (bufferAr.length){
+                            hit();
+                        }
+                    };
+                };
+                zeroCnt = 0;
+            };
+        };
+        if (lastStart < data.length){
+            bufferAr.push(data.subarray(lastStart));
+        };
+    };
+}
+
+function fetchAB (url, cb) {
+    console.log(url);
+    var xhr = new XMLHttpRequest;
+    xhr.open('get', url);
+    xhr.responseType = 'arraybuffer';
+    xhr.onload = function () {
+        cb(xhr.response);
+    };
+    xhr.send();
+}
+
+// fetchAB("zeVideo.mp4", function (buffer) {
+//     avc.decode(new Uint8Array(buffer));
+// })
+
+function findNal(packet) {
+    for (var start = 0; start < packet.length - 4; ++start) {
+        if (packet[start] === 0 &&
+            packet[start + 1] === 0 &&
+            packet[start + 2] === 0 &&
+            packet[start + 3] === 1) {
+            return start;
+        }
+    }
+
+    return -1;
+}
 
 function onMessage(evt) {
-
     var message = null;
     var binaryData = null;
     if (evt.data instanceof ArrayBuffer) {
         binaryData = new Uint8Array(evt.data);
-        avc.decode(binaryData);
+        //avc.decode(binaryData);
+        h264p.play(binaryData);
     } else {
         message = JSON.parse(evt.data);
         console.log(JSON.stringify(evt.data));

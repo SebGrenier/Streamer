@@ -17,15 +17,20 @@ using critical_section_holder = std::lock_guard<std::mutex>;
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
 
-constexpr long long frame_rate = (long long)(1.0f / 60.0f * 1000.0f);
+constexpr long long frame_rate = 1000;// (long long)(1.0f / 60.0f * 1000.0f);
 constexpr int max_buffer_size = 63 * 1024;
 constexpr const char* server_address = "127.0.0.1";
 constexpr short server_port = 54321;
 
 unsigned char *io_buffer = nullptr;
+int io_buffer_size = 4 * 1024;
 
 server serv;
+
+#define WRITE_FILE
+#ifdef WRITE_FILE
 FILE *test_file;
+#endif
 
 int round_to_higher_multiple_of_two(int value)
 {
@@ -59,7 +64,10 @@ int write_packet(void *opaque, uint8_t *buf, int buf_size)
 	auto self = static_cast<Streamer*>(opaque);
 
 	self->send_packet_buffer(buf, buf_size);
+
+#ifdef WRITE_FILE
 	fwrite(buf, 1, buf_size, test_file);
+#endif
 
 	return 0;
 }
@@ -149,8 +157,8 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	}
 
 	if ((_format_context->oformat->flags & AVFMT_NOFILE) == 0) {
-		io_buffer = (unsigned char*)av_malloc(4096);
-		_format_context->pb = avio_alloc_context(io_buffer, 4096, 1, (void*)this, nullptr, write_packet, nullptr);
+		io_buffer = (unsigned char*)av_malloc(io_buffer_size);
+		_format_context->pb = avio_alloc_context(io_buffer, io_buffer_size, 1, (void*)this, nullptr, write_packet, nullptr);
 		//auto ret = avio_open(&_format_context->pb, path.c_str(), AVIO_FLAG_WRITE);
 		if (_format_context->pb == nullptr) {
 			//char error_buff[80];
@@ -189,13 +197,15 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	_current_frame.info = _streaming_info;
 	_current_frame.data.resize(width * height * depth, 0);
 
-	av_dump_format(_format_context, _video_stream->index, "info.txt", 1);
+	//av_dump_format(_format_context, _video_stream->index, "info.txt", 1);
 
 	_quit_thread = false;
 
+#ifdef WRITE_FILE
 	fopen_s(&test_file, "zeVideo.mp4", "wb");
+#endif
 
-	_streamer_thread = new std::thread(&Streamer::run_encoding_thread, this);
+	//_streamer_thread = new std::thread(&Streamer::run_encoding_thread, this);
 
 	_stream_opened = true;
 	return true;
@@ -203,11 +213,19 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 
 void Streamer::close_stream()
 {
-	_quit_thread = true;
-	_streamer_thread->join();
-	delete _streamer_thread;
+	/* get the delayed frames */
+	int got_packet;
+	do {
+		got_packet = encode_frame(nullptr, _video_stream->codec);
+	} while (got_packet);
 
+	//_quit_thread = true;
+	//_streamer_thread->join();
+	//delete _streamer_thread;
+
+#ifdef WRITE_FILE
 	fclose(test_file);
+#endif
 
 	av_free(_format_context->pb);
 	av_free(io_buffer);
@@ -223,10 +241,39 @@ void Streamer::close_stream()
 
 void Streamer::stream_frame(const uint8_t* frame, int width, int height, short depth)
 {
-	{
-		critical_section_holder holder(_frame_mutex);
-		std::copy(frame, frame + width * height * depth, _current_frame.data.begin());
+	//{
+	//	critical_section_holder holder(_frame_mutex);
+	//	std::copy(frame, frame + width * height * depth, _current_frame.data.begin());
+	//}
+
+	AVFrame* inpic = av_frame_alloc(); // mandatory frame allocation
+
+	inpic->format = AV_PIX_FMT_RGB24;
+	inpic->width = _video_stream->codec->width;
+	inpic->height = _video_stream->codec->height;
+	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, AV_PIX_FMT_RGB24, width, height, 32);
+	if (success < 0) {
+		std::cout << "Error transforming data into frame" << std::endl;
+		av_frame_free(&inpic);
+		return;
 	}
+
+	AVFrame* outpic = av_frame_alloc();
+	outpic->format = AV_PIX_FMT_YUV420P;
+	outpic->width = _video_stream->codec->width;
+	outpic->height = _video_stream->codec->height;
+	//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
+	//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
+	outpic->pts = _frame_counter++;
+	av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
+
+	sws_scale(_scale_context, inpic->data, inpic->linesize, 0, _video_stream->codec->height, outpic->data, outpic->linesize);          // converting frame size and format
+
+	encode_frame(outpic, _video_stream->codec);
+
+	av_freep(&outpic->data[0]);
+	av_frame_free(&inpic);
+	av_frame_free(&outpic);
 }
 
 bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream *stream, int width, int height) const
@@ -237,7 +284,7 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream 
 	codec_context->bit_rate = 400000;
 	stream->time_base.num = 1;                                   // framerate numerator
 	stream->time_base.den = 60;                                  // framerate denominator
-	codec_context->gop_size = 1;                                       // emit one intra frame every ten frames
+	codec_context->gop_size = 10;                                       // emit one intra frame every ten frames
 	codec_context->max_b_frames = 2;                                    // maximum number of b-frames between non b-frames
 	codec_context->keyint_min = 1;                                      // minimum GOP size
 	codec_context->i_quant_factor = (float)0.71;                        // qscale factor between P and I frames
@@ -254,9 +301,11 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream 
 
 	if (codec_context->codec_id == AV_CODEC_ID_H264) {
 		av_opt_set(codec_context->priv_data, "preset", "ultrafast", 0);
+		av_opt_set(codec_context->priv_data, "profile", "baseline", 0);
+		av_opt_set(codec_context->priv_data, "level", "3.0", 0);
 		av_opt_set(codec_context->priv_data, "tune", "zerolatency", 0);
-		av_opt_set(codec_context->priv_data, "frag_duration", "100000", 0);
-		av_opt_set(codec_context->priv_data, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
+		//av_opt_set(codec_context->priv_data, "frag_duration", "100000", 0);
+		//av_opt_set(codec_context->priv_data, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 	}
 
 	/* Some formats want stream headers to be separate. */
@@ -266,8 +315,10 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream 
 
 	AVDictionary *dict = nullptr;
 	av_dict_set(&dict, "preset", "ultrafast", 0);
+	av_dict_set(&dict, "profile", "baseline", 0);
+	av_dict_set(&dict, "level", "3.0", 0);
 	av_dict_set(&dict, "tune", "zerolatency", 0);
-	av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
+	//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 
 	if (avcodec_open2(codec_context, _codec, &dict) < 0) {
 		std::cout << "Could not open codec" << std::endl; // opening the codec
@@ -295,7 +346,7 @@ int Streamer::encode_frame(AVFrame *frame, AVCodecContext *context)
 		if (success < 0) {
 			std::cout << "Error streaming frame" << std::endl;
 		}
-		//av_packet_unref(&packet);
+		av_packet_unref(&packet);
 	}
 
 	return got_packet;
