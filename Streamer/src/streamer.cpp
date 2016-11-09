@@ -281,7 +281,7 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream 
 	codec_context->width = width;  // resolution must be a multiple of two (1280x720),(1900x1080),(720x480)
 	codec_context->height = height;
 
-	codec_context->bit_rate = 400000;
+	codec_context->bit_rate = 1000000;
 	stream->time_base.num = 1;                                   // framerate numerator
 	stream->time_base.den = 60;                                  // framerate denominator
 	codec_context->gop_size = 10;                                       // emit one intra frame every ten frames
