@@ -23,8 +23,8 @@ constexpr const char* server_address = "127.0.0.1";
 constexpr short server_port = 12345;
 constexpr int max_buffer_size = 63 * 1024;
 
-constexpr int width_start = 1280;
-constexpr int height_start = 720;
+constexpr int width_start = 1920;
+constexpr int height_start = 1080;
 constexpr int bitdepth = 3;
 
 std::vector<uint8_t>& operator << (std::vector<uint8_t> &vec, std::string &string)
