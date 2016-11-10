@@ -1,5 +1,6 @@
 <html>
 <head>
+    <link rel="stylesheet" href="test2.css">
     <script id="shader-vs" type="x-shader/x-vertex">
         attribute vec3 aVertexPosition;
         attribute vec2 aTextureCoord;
@@ -31,6 +32,12 @@
 </head>
 <body>
 <!--canvas width="1280" height="720">Your browser bla bla bla...</canvas-->
+<div class="container">
+    <div id="overlay">
+        <div>Bandwidth: <span id="bandwidth"></span> kb/s</div>
+        <div>Time to decode: <span id="decode"></span> ms</div>
+    </div>
+</div>
 
 <script src="sylvester.js"></script>
 <script src="gl-utils.js"></script>
