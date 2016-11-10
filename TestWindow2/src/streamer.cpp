@@ -27,7 +27,7 @@ int io_buffer_size = 4 * 1024;
 
 server serv;
 
-#define WRITE_FILE
+//#define WRITE_FILE
 #ifdef WRITE_FILE
 FILE *test_file;
 #endif
@@ -41,17 +41,6 @@ bool operator != (const StreamingInfo &lhs, const StreamingInfo rhs)
 {
 	return lhs.width != rhs.width ||
 		lhs.height != rhs.height;
-}
-
-static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt)
-{
-	AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
-
-	/*printf("pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
-	av_ts_make_string(pkt->pts), av_ts_make_string(pkt->pts, time_base),
-	av_ts_make_string(pkt->dts), av_ts_make_string(pkt->dts, time_base),
-	av_ts_make_string(pkt->duration), av_ts_make_string(pkt->duration, time_base),
-	pkt->stream_index);*/
 }
 
 int read_packet(void *opaque, uint8_t *buf, int buf_size)
@@ -80,9 +69,7 @@ Streamer::Streamer()
 	, _initialized(false)
 	, _stream_opened(false)
 	, _frame_counter(0)
-	, _streamer_thread(nullptr)
 	, _ws_thread(nullptr)
-    , _quit_thread(false)
 {
 }
 
@@ -191,21 +178,9 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		return false;
 	}
 
-	_streaming_info.height = height;
-	_streaming_info.width = width;
-	_streaming_info.depth = depth;
-	_current_frame.info = _streaming_info;
-	_current_frame.data.resize(width * height * depth, 0);
-
-	//av_dump_format(_format_context, _video_stream->index, "info.txt", 1);
-
-	_quit_thread = false;
-
 #ifdef WRITE_FILE
 	fopen_s(&test_file, "zeVideo.mp4", "wb");
 #endif
-
-	//_streamer_thread = new std::thread(&Streamer::run_encoding_thread, this);
 
 	_stream_opened = true;
 	return true;
@@ -218,10 +193,6 @@ void Streamer::close_stream()
 	do {
 		got_packet = encode_frame(nullptr, _video_stream->codec);
 	} while (got_packet);
-
-	//_quit_thread = true;
-	//_streamer_thread->join();
-	//delete _streamer_thread;
 
 #ifdef WRITE_FILE
 	fclose(test_file);
@@ -241,17 +212,17 @@ void Streamer::close_stream()
 
 void Streamer::stream_frame(const uint8_t* frame, int width, int height, short depth)
 {
-	//{
-	//	critical_section_holder holder(_frame_mutex);
-	//	std::copy(frame, frame + width * height * depth, _current_frame.data.begin());
-	//}
+	if (_connections.size() == 0) {
+		return;
+	}
 
 	AVFrame* inpic = av_frame_alloc(); // mandatory frame allocation
 
-	inpic->format = AV_PIX_FMT_RGB24;
+	auto input_format = depth == 3 ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_RGBA;
+	inpic->format = input_format;
 	inpic->width = _video_stream->codec->width;
 	inpic->height = _video_stream->codec->height;
-	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, AV_PIX_FMT_RGB24, width, height, 32);
+	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, input_format, width, height, 32);
 	if (success < 0) {
 		std::cout << "Error transforming data into frame" << std::endl;
 		av_frame_free(&inpic);
@@ -265,9 +236,15 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 	//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
 	//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
 	outpic->pts = _frame_counter++;
-	av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
+	success = av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
+	if (success < 0) {
+		std::cout << "Error allocating new frame" << std::endl;
+		av_frame_free(&inpic);
+		av_frame_free(&outpic);
+		return;
+	}
 
-	sws_scale(_scale_context, inpic->data, inpic->linesize, 0, _video_stream->codec->height, outpic->data, outpic->linesize);          // converting frame size and format
+	sws_scale(_scale_context, inpic->data, inpic->linesize, 0, height, outpic->data, outpic->linesize);          // converting frame size and format
 
 	encode_frame(outpic, _video_stream->codec);
 
@@ -350,60 +327,6 @@ int Streamer::encode_frame(AVFrame *frame, AVCodecContext *context)
 	}
 
 	return got_packet;
-}
-
-void Streamer::run_encoding_thread()
-{
-	while(!_quit_thread) {
-		AVFrame* inpic = av_frame_alloc(); // mandatory frame allocation
-
-		{
-			std::lock_guard<std::mutex> critical_section(_frame_mutex);
-
-			inpic->format = AV_PIX_FMT_RGB24;
-			inpic->width = _video_stream->codec->width;
-			inpic->height = _video_stream->codec->height;
-			auto success = av_image_fill_arrays(inpic->data, inpic->linesize, _current_frame.data.data(), AV_PIX_FMT_RGB24, _current_frame.info.width, _current_frame.info.height, 32);
-			if (success < 0) {
-				std::cout << "Error transforming data into frame" << std::endl;
-				av_frame_free(&inpic);
-				return;
-			}
-		}
-
-		AVFrame* outpic = av_frame_alloc();
-		outpic->format = AV_PIX_FMT_YUV420P;
-		outpic->width = _video_stream->codec->width;
-		outpic->height = _video_stream->codec->height;
-		//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
-		//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
-		outpic->pts = _frame_counter++;
-		av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
-
-		sws_scale(_scale_context, inpic->data, inpic->linesize, 0, _video_stream->codec->height, outpic->data, outpic->linesize);          // converting frame size and format
-
-		encode_frame(outpic, _video_stream->codec);
-
-		av_freep(&outpic->data[0]);
-		av_frame_free(&inpic);
-		av_frame_free(&outpic);
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(frame_rate));
-	}
-
-	/* get the delayed frames */
-	int got_packet;
-	do {
-		got_packet = encode_frame(nullptr, _video_stream->codec);
-	} while (got_packet);
-
-	av_write_trailer(_format_context);
-
-	if (!(_format_context->flags & AVFMT_NOFILE)) {
-		/* Close the output. */
-		//avio_closep(&_format_context->pb);
-	}
-
 }
 
 void Streamer::run_websocket_thread()
@@ -526,7 +449,6 @@ int Streamer::write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base,
 	pkt->stream_index = st->index;
 
 	/* Write the compressed frame to the media file. */
-	log_packet(fmt_ctx, pkt);
 	return av_interleaved_write_frame(fmt_ctx, pkt);
 }
 
