@@ -1,6 +1,6 @@
 "use strict";
 
-var _ws = new WebSocket("ws://" + "127.0.0.1" + ":" + "54321");
+var _ws = new WebSocket("ws://" + window.location.hostname + ":" + "54321");
 var _utf8Decoder = new TextDecoder("utf-8");
 
 
