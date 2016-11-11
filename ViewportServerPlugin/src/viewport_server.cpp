@@ -17,6 +17,22 @@ void send_buffer(websocketpp::connection_hdl h, void *buffer, int size)
 	serv.send(h, buffer, size, websocketpp::frame::opcode::BINARY);
 }
 
+class ViewportClient
+{
+public:
+	ViewportClient()
+		: _closed(false)
+	{}
+
+	~ViewportClient()
+	{}
+
+	bool closed() const { return _closed; }
+
+private:
+	bool _closed;
+};
+
 ViewportServer::ViewportServer()
 	: _initialized(false)
 	, _allocator(nullptr)
@@ -97,9 +113,6 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 
 
 				}
-				else if (opcode == websocketpp::frame::opcode::BINARY) {
-					auto &payload = msg->get_payload();
-				}
 			});
 
 			serv.set_http_handler([](websocketpp::connection_hdl hdl)
@@ -173,6 +186,8 @@ void ViewportServer::run_client(ViewportClient *client)
 		while(!_quit && !c->closed()) {
 
 		}
+
+		delete c;
 	}, client);
 
 	_clients.push_back(thread_id);

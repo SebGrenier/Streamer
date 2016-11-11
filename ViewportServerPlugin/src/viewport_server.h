@@ -8,6 +8,7 @@ struct RenderBufferApi;
 struct ThreadApi;
 struct AllocatorApi;
 struct AllocatorObject;
+class ViewportClient;
 
 struct EnginePluginApis
 {
@@ -16,22 +17,6 @@ struct EnginePluginApis
 	RenderBufferApi *render_buffer_api;
 	ThreadApi *thread_api;
 	AllocatorApi *allocator_api;
-};
-
-class ViewportClient
-{
-public:
-	ViewportClient()
-		: _closed(false)
-	{}
-
-	~ViewportClient()
-	{}
-
-	bool closed() const { return _closed; }
-
-private:
-	bool _closed;
 };
 
 class ViewportServer
