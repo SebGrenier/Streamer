@@ -14,3 +14,6 @@ Decoder/x64/
 Decoder/Debug/
 HTML5/node_modules/
 TestWindow2/x64/
+ViewportServerPlugin/x64/
+StreamLib/x64/
+x64/
