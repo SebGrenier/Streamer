@@ -75,21 +75,6 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 		auto port = data->port;
 		self->_apis.allocator_api->deallocate(self->_allocator, data);
 
-		auto hdl_equal = [](websocketpp::connection_hdl u, websocketpp::connection_hdl t) -> auto {
-			return !t.owner_before(u) && !u.owner_before(t);
-		};
-
-		auto remove_connection = [self, &hdl_equal](websocketpp::connection_hdl hdl)
-		{
-			critical_section_holder csh(self->_client_mutex);
-			for (auto it = self->_connections.begin(), end = self->_connections.end(); it != end; ++it) {
-				if (hdl_equal(hdl, *it)) {
-					self->_connections.erase(it);
-					break;
-				}
-			}
-		};
-
 		try {
 			// Set logging settings
 			serv.set_access_channels(websocketpp::log::alevel::none);
@@ -110,11 +95,7 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 						<< " and message: " << msg->get_payload();
 					self->info(ss.str().c_str());
 
-					auto request = msg->get_payload();
-					if (request == "open") {
-						critical_section_holder csh(self->_client_mutex);
-						self->_connections.push_back(hdl);
-					}
+
 				}
 				else if (opcode == websocketpp::frame::opcode::BINARY) {
 					auto &payload = msg->get_payload();
@@ -133,18 +114,16 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 				con->set_body(ss.str());
 				con->set_status(websocketpp::http::status_code::ok);
 			});
-			serv.set_fail_handler([&remove_connection, self](websocketpp::connection_hdl hdl)
+			serv.set_fail_handler([self](websocketpp::connection_hdl hdl)
 			{
 				auto con = serv.get_con_from_hdl(hdl);
 				std::stringstream ss;
 				ss << "Fail handler: " << con->get_ec() << " " << con->get_ec().message() << std::endl;
 				self->error(ss.str().c_str());
-				remove_connection(hdl);
 			});
-			serv.set_close_handler([&remove_connection, self](websocketpp::connection_hdl hdl)
+			serv.set_close_handler([self](websocketpp::connection_hdl hdl)
 			{
 				self->info("Close handler");
-				remove_connection(hdl);
 			});
 			serv.set_validate_handler([](websocketpp::connection_hdl)
 			{
@@ -186,15 +165,29 @@ void ViewportServer::stop_ws_server()
 	delete _ws_thread;
 }
 
-void ViewportServer::run_client()
+void ViewportServer::run_client(ViewportClient *client)
 {
-	auto thread_id = new std::thread([]()
+	// We transfer ownership of the client to this thread
+	auto thread_id = new std::thread([this](ViewportClient *c)
 	{
+		while(!_quit && !c->closed()) {
 
-	});
+		}
+	}, client);
 
 	_clients.push_back(thread_id);
 }
+
+void ViewportServer::close_all_clients()
+{
+	critical_section_holder csh(_client_mutex);
+	for (auto &t : _clients) {
+		t->join();
+		delete t;
+	}
+	_clients.clear();
+}
+
 
 void ViewportServer::info(const char* message)
 {

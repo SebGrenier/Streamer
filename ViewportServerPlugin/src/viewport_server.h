@@ -1,5 +1,4 @@
 #pragma once
-#include <websocketpp/transport/base/connection.hpp>
 #include <vector>
 #include <mutex>
 
@@ -19,6 +18,22 @@ struct EnginePluginApis
 	AllocatorApi *allocator_api;
 };
 
+class ViewportClient
+{
+public:
+	ViewportClient()
+		: _closed(false)
+	{}
+
+	~ViewportClient()
+	{}
+
+	bool closed() const { return _closed; }
+
+private:
+	bool _closed;
+};
+
 class ViewportServer
 {
 public:
@@ -31,7 +46,7 @@ private:
 	void start_ws_server(const char *ip, int port);
 	void stop_ws_server();
 
-	void run_client();
+	void run_client(ViewportClient *client);
 	void close_all_clients();
 
 	void info(const char *message);
