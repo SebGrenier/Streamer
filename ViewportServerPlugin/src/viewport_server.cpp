@@ -1,10 +1,11 @@
 #include "viewport_server.h"
 
 #include <engine_plugin_api/plugin_api.h>
+#include <plugin_foundation/id_string.h>
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-constexpr const char *PLUGIN_NAME = "Viewport Server Plugin";
+using namespace stingray_plugin_foundation;
 
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
@@ -17,21 +18,10 @@ void send_buffer(websocketpp::connection_hdl h, void *buffer, int size)
 	serv.send(h, buffer, size, websocketpp::frame::opcode::BINARY);
 }
 
-class ViewportClient
+void send_text(websocketpp::connection_hdl h, const std::string &message)
 {
-public:
-	ViewportClient()
-		: _closed(false)
-	{}
-
-	~ViewportClient()
-	{}
-
-	bool closed() const { return _closed; }
-
-private:
-	bool _closed;
-};
+	serv.send(h, message, websocketpp::frame::opcode::TEXT);
+}
 
 ViewportServer::ViewportServer()
 	: _initialized(false)
@@ -100,33 +90,6 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 			serv.init_asio();
 			serv.set_reuse_addr(true);
 
-			// Register our message handler
-			serv.set_message_handler([self](websocketpp::connection_hdl hdl, msg_ptr msg)
-			{
-				auto opcode = msg->get_opcode();
-
-				if (opcode == websocketpp::frame::opcode::TEXT) {
-					std::stringstream ss;
-					ss << "on_message called with hdl: " << hdl.lock().get()
-						<< " and message: " << msg->get_payload();
-					self->info(ss.str().c_str());
-
-
-				}
-			});
-
-			serv.set_http_handler([](websocketpp::connection_hdl hdl)
-			{
-				auto con = serv.get_con_from_hdl(hdl);
-
-				auto res = con->get_request_body();
-
-				std::stringstream ss;
-				ss << "got HTTP request with " << res.size() << " bytes of body data.";
-
-				con->set_body(ss.str());
-				con->set_status(websocketpp::http::status_code::ok);
-			});
 			serv.set_fail_handler([self](websocketpp::connection_hdl hdl)
 			{
 				auto con = serv.get_con_from_hdl(hdl);
@@ -138,8 +101,11 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 			{
 				self->info("Close handler");
 			});
-			serv.set_validate_handler([](websocketpp::connection_hdl)
+			serv.set_validate_handler([self](websocketpp::connection_hdl hdl)
 			{
+				auto con = serv.get_con_from_hdl(hdl);
+				auto origin = con->get_origin();
+				self->info("(Validate) Origin: " + origin);
 				// TODO: check if the connection is for the viewport server.
 				return true;
 			});
@@ -147,6 +113,31 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 			{
 				auto con = serv.get_con_from_hdl(hdl);
 				self->info("Open handler");
+
+				CommunicationHandlers h;
+				h.info = [self](auto msg) {self->info(msg); };
+				h.warning = [self](auto msg) {self->warning(msg); };
+				h.error = [self](auto msg) {self->error(msg); };
+				h.send_binary = [](auto hdl, auto buffer, auto size) {send_buffer(hdl, buffer, size); };
+				h.send_text = [](auto hdl, auto msg) {send_text(hdl, msg); };
+
+				auto *client = new ViewportClient(self->_apis, h, hdl, self->_allocator);
+
+				// Register our message handler
+				con->set_message_handler([client](websocketpp::connection_hdl hdl, msg_ptr msg)
+				{
+					client->handle_message(hdl, msg);
+				});
+				con->set_close_handler([self, client](websocketpp::connection_hdl hdl)
+				{
+					client->handle_close(hdl);
+				});
+				con->set_fail_handler([self, client](websocketpp::connection_hdl hdl)
+				{
+					client->handle_fail(hdl);
+				});
+
+				self->run_client(client);
 			});
 
 			// Listen on port
@@ -158,11 +149,12 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 			// Start the ASIO io_service run loop
 			serv.run();
 		}
-		catch (const std::exception & e) {
-			self->error(e.what());
-		}
 		catch (websocketpp::lib::error_code e) {
-			self->error(e.message().c_str());
+			self->error("ws error: " + e.message());
+		}
+		catch (const std::exception & e) {
+			auto s = std::string(e.what());
+			self->error("std error: " + s);
 		}
 		catch (...) {
 			self->error("Other exception");
@@ -180,29 +172,43 @@ void ViewportServer::stop_ws_server()
 
 void ViewportServer::run_client(ViewportClient *client)
 {
-	// We transfer ownership of the client to this thread
-	auto thread_id = new std::thread([this](ViewportClient *c)
-	{
-		while(!_quit && !c->closed()) {
+	critical_section_holder csh(_client_mutex);
+	if (_quit) {
+		delete client;
+		return;
+	}
 
-		}
-
-		delete c;
-	}, client);
-
-	_clients.push_back(thread_id);
+	client->run();
+	_clients.push_back(client);
 }
 
 void ViewportServer::close_all_clients()
 {
 	critical_section_holder csh(_client_mutex);
 	for (auto &t : _clients) {
-		t->join();
+		t->stop();
 		delete t;
 	}
 	_clients.clear();
 }
 
+void ViewportServer::info(const std::string &message)
+{
+	if (_apis.logging_api)
+		_apis.logging_api->info(PLUGIN_NAME, message.c_str());
+}
+
+void ViewportServer::warning(const std::string &message)
+{
+	if (_apis.logging_api)
+		_apis.logging_api->warning(PLUGIN_NAME, message.c_str());
+}
+
+void ViewportServer::error(const std::string &message)
+{
+	if (_apis.logging_api)
+		_apis.logging_api->error(PLUGIN_NAME, message.c_str());
+}
 
 void ViewportServer::info(const char* message)
 {

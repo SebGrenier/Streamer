@@ -83,6 +83,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>false</SDLCheck>
       <AdditionalIncludeDirectories>D:\Games\boost_1_60_0;$(SolutionDir)3rdparty/include;D:\Games\stingray\build\binaries\plugin_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WINDOWSPC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>D:\Games\boost_1_60_0\lib64-msvc-14.0;$(SolutionDir)3rdparty/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -111,6 +112,8 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>D:\Games\boost_1_60_0;$(SolutionDir)3rdparty/include;D:\Games\stingray\build\binaries\plugin_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WINDOWSPC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -120,12 +123,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\nf_config_data.cpp" />
+    <ClCompile Include="src\nf_json_parser.cpp" />
+    <ClCompile Include="src\nf_memory_tracker.cpp" />
+    <ClCompile Include="src\nf_string_table.cpp" />
     <ClCompile Include="src\streamer.cpp" />
+    <ClCompile Include="src\viewport_client.cpp" />
     <ClCompile Include="src\viewport_server.cpp" />
     <ClCompile Include="src\viewport_server_plugin.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\common.h" />
+    <ClInclude Include="src\config_data.h" />
+    <ClInclude Include="src\nflibs.h" />
     <ClInclude Include="src\streamer.h" />
+    <ClInclude Include="src\viewport_client.h" />
     <ClInclude Include="src\viewport_server.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

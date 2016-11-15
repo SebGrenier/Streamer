@@ -25,14 +25,12 @@ struct FrameInfo
 	std::vector<uint8_t> data;
 };
 
-bool operator != (const StreamingInfo &lhs, const StreamingInfo rhs);
-
 struct StreamConfig
 {
-	void *(on_packet_write)(uint8_t *buffer, int size);
-	void *(info)(const char *message);
-	void *(warning)(const char *message);
-	void *(error)(const char *message);
+	std::function<void(uint8_t*, int)> on_packet_write;
+	std::function<void(const std::string&)> info;
+	std::function<void(const std::string&)> warning;
+	std::function<void(const std::string&)> error;
 };
 
 class Streamer
@@ -54,7 +52,7 @@ public:
 
 	const StreamingInfo& streaming_info() const { return _streaming_info; }
 private:
-	bool initialize_codec_context(AVCodecContext *codec_context, AVStream *stream, int width, int height) const;
+	bool initialize_codec_context(AVCodecContext *codec_context, AVStream *stream, int width, int height);
 	int encode_frame(AVFrame *frame, AVCodecContext *context);
 
 	int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt);

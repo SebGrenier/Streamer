@@ -1,6 +1,5 @@
 #include "streamer.h"
 #include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
 
 extern "C"
 {
@@ -10,8 +9,6 @@ extern "C"
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 }
-
-#include <iostream>
 
 unsigned char *io_buffer = nullptr;
 constexpr int io_buffer_size = 4 * 1024;
@@ -31,25 +28,6 @@ bool operator != (const StreamingInfo &lhs, const StreamingInfo rhs)
 	return lhs.width != rhs.width ||
 		lhs.height != rhs.height ||
 		lhs.depth != rhs.depth;
-}
-
-int read_packet(void *opaque, uint8_t *buf, int buf_size)
-{
-	return 0;
-}
-
-int write_packet(void *opaque, uint8_t *buf, int buf_size)
-{
-	auto self = static_cast<Streamer*>(opaque);
-
-	// TODO: call on_write_packet
-
-
-#ifdef WRITE_FILE
-	fwrite(buf, 1, buf_size, test_file);
-#endif
-
-	return 0;
 }
 
 Streamer::Streamer(StreamConfig config)
@@ -77,20 +55,20 @@ Streamer::~Streamer()
 
 bool Streamer::init()
 {
-	std::cout << "Registering formats" << std::endl;
+	_config.info("Registering formats");
 	av_register_all();
-	std::cout << "Registering codecs" << std::endl;
+	_config.info("Registering codecs");
 	avcodec_register_all();
-	std::cout << "Initializing network components" << std::endl;
+	_config.info("Initializing network components");
 	avformat_network_init();
-	std::cout << "Done." << std::endl;
+	_config.info("Done.");
 
 	_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 	if (!_codec) {
-		std::cout << "Codec not found" << std::endl;
+		_config.error("Codec not found");
 		return false;
 	}
-	std::cout << "H264 codec found" << std::endl;
+	_config.info("H264 codec found");
 
 	_initialized = true;
 	return true;
@@ -112,33 +90,44 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 
 	avformat_alloc_output_context2(&_format_context, nullptr, format.c_str(), nullptr);
 	if (_format_context == nullptr) {
-		std::cout << "Failed to allocate format context for " << path << " with format " << format << std::endl;
+		_config.error("Failed to allocate format context for " + path + " with format " + format);
 		return false;
 	}
 
 	_video_stream = avformat_new_stream(_format_context, _codec);
 	if (_video_stream == nullptr) {
-		std::cout << "Failed to open video stream for " << path << " with format " << format << std::endl;
+		_config.info("Failed to open video stream for " + path + " with format " + format);
 		return false;
 	}
 
 	auto *codec_context = _video_stream->codec;
 	if (!initialize_codec_context(codec_context, _video_stream, new_width, new_height)) {
-		std::cout << "Could not initialize codec context" << std::endl;
+		_config.error("Could not initialize codec context");
 		return false;
 	}
 
 	if ((_format_context->oformat->flags & AVFMT_NOFILE) == 0) {
 		io_buffer = (unsigned char*)av_malloc(io_buffer_size);
-		_format_context->pb = avio_alloc_context(io_buffer, io_buffer_size, 1, (void*)this, nullptr, write_packet, nullptr);
+		_format_context->pb = avio_alloc_context(io_buffer, io_buffer_size, 1, (void*)this, nullptr, [](void *opaque, uint8_t *buf, int buf_size)
+		{
+			auto self = static_cast<Streamer*>(opaque);
+
+			self->_config.on_packet_write(buf, buf_size);
+
+			#ifdef WRITE_FILE
+				fwrite(buf, 1, buf_size, test_file);
+			#endif
+
+			return 0;
+		}, nullptr);
 		if (_format_context->pb == nullptr) {
-			std::cout << "Could not open output " << path << std::endl;
+			_config.error("Could not open output " + path);
 			return false;
 		}
 	}
 
 	if (avformat_write_header(_format_context, nullptr) < 0) {
-		std::cout << "Could not write header" << std::endl;
+		_config.error("Could not write header");
 		return false;
 	}
 
@@ -155,7 +144,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		nullptr // params
 		);
 	if (_scale_context == nullptr) {
-		std::cout << "Failed to allocate scale context" << std::endl;
+		_config.error("Failed to allocate scale context");
 		return false;
 	}
 
@@ -201,7 +190,7 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 	inpic->height = _video_stream->codec->height;
 	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, input_format, width, height, 32);
 	if (success < 0) {
-		std::cout << "Error transforming data into frame" << std::endl;
+		_config.error("Error transforming data into frame");
 		av_frame_free(&inpic);
 		return;
 	}
@@ -215,7 +204,7 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 	outpic->pts = _frame_counter++;
 	success = av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
 	if (success < 0) {
-		std::cout << "Error allocating new frame" << std::endl;
+		_config.error("Error allocating new frame");
 		av_frame_free(&inpic);
 		av_frame_free(&outpic);
 		return;
@@ -230,7 +219,7 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 	av_frame_free(&outpic);
 }
 
-bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream *stream, int width, int height) const
+bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream *stream, int width, int height)
 {
 	codec_context->width = width;  // resolution must be a multiple of two (1280x720),(1900x1080),(720x480)
 	codec_context->height = height;
@@ -275,10 +264,10 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream 
 	//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 
 	if (avcodec_open2(codec_context, _codec, &dict) < 0) {
-		std::cout << "Could not open codec" << std::endl; // opening the codec
+		_config.error("Could not open codec"); // opening the codec
 		return false;
 	}
-	std::cout << "H264 codec opened" << std::endl;
+	_config.info("H264 codec opened");
 
 	return true;
 }
@@ -292,13 +281,13 @@ int Streamer::encode_frame(AVFrame *frame, AVCodecContext *context)
 	auto got_packet = 0;
 	auto success = avcodec_encode_video2(context, &packet, frame, &got_packet);
 	if (success < 0) {
-		std::cout << "Error encoding frame" << std::endl;
+		_config.error("Error encoding frame");
 	}
 
 	if (got_packet != 0) {
 		success = write_frame(_format_context, &_video_stream->time_base, _video_stream, &packet);
 		if (success < 0) {
-			std::cout << "Error streaming frame" << std::endl;
+			_config.error("Error streaming frame");
 		}
 		av_packet_unref(&packet);
 	}

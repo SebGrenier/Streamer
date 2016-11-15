@@ -1,23 +1,9 @@
 #pragma once
+#include "common.h"
+#include "viewport_client.h"
+
 #include <vector>
 #include <mutex>
-
-struct LoggingApi;
-struct StreamCaptureApi;
-struct RenderBufferApi;
-struct ThreadApi;
-struct AllocatorApi;
-struct AllocatorObject;
-class ViewportClient;
-
-struct EnginePluginApis
-{
-	LoggingApi *logging_api;
-	StreamCaptureApi *stream_capture_api;
-	RenderBufferApi *render_buffer_api;
-	ThreadApi *thread_api;
-	AllocatorApi *allocator_api;
-};
 
 class ViewportServer
 {
@@ -34,6 +20,9 @@ private:
 	void run_client(ViewportClient *client);
 	void close_all_clients();
 
+	void info(const std::string &message);
+	void warning(const std::string &message);
+	void error(const std::string &message);
 	void info(const char *message);
 	void warning(const char *message);
 	void error(const char *message);
@@ -44,6 +33,6 @@ private:
 
 	std::thread *_ws_thread;
 	std::mutex _client_mutex;
-	std::vector<std::thread*> _clients;
+	std::vector<ViewportClient*> _clients;
 	bool _quit;
 };
