@@ -286,9 +286,21 @@ function onMessage(evt) {
     }
 }
 
+var openCommand = JSON.stringify({
+    id: 1,
+    type: 1,
+    handle: 6686044,
+    options: {
+        bit_rate: 400000,
+        gop_size: 10,
+        qmin:0,
+        qmax: 18
+    }
+});
+
 function onOpen() {
     console.log("onOpen");
-    _ws.send("open");
+    _ws.send(openCommand);
 }
 
 function onClose() {

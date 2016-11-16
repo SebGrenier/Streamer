@@ -81,8 +81,9 @@ void Streamer::shutdown()
 }
 
 
-bool Streamer::open_stream(int width, int height, short depth, const std::string &format, const std::string &path)
+bool Streamer::open_stream(int width, int height, short depth, const std::string &format, const std::string &path, const StreamOptions &options)
 {
+	_options = options;
 	_frame_counter = 0;
 
 	auto new_width = round_to_higher_multiple_of_two(width);
@@ -186,9 +187,9 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 
 	auto input_format = depth == 3 ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_RGBA;
 	inpic->format = input_format;
-	inpic->width = _video_stream->codec->width;
-	inpic->height = _video_stream->codec->height;
-	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, input_format, width, height, 32);
+	inpic->width = width;
+	inpic->height = height;
+	auto success = av_image_fill_arrays(inpic->data, inpic->linesize, frame, input_format, width, height, 1);
 	if (success < 0) {
 		_config.error("Error transforming data into frame");
 		av_frame_free(&inpic);
@@ -224,17 +225,17 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream 
 	codec_context->width = width;  // resolution must be a multiple of two (1280x720),(1900x1080),(720x480)
 	codec_context->height = height;
 
-	codec_context->bit_rate = 400000;
+	codec_context->bit_rate = _options.bit_rate;
 	stream->time_base.num = 1;                                   // framerate numerator
 	stream->time_base.den = 60;                                  // framerate denominator
-	codec_context->gop_size = 10;                                       // emit one intra frame every ten frames
+	codec_context->gop_size = _options.gop_size;                       // emit one intra frame every ten frames
 	codec_context->max_b_frames = 2;                                    // maximum number of b-frames between non b-frames
 	codec_context->keyint_min = 1;                                      // minimum GOP size
 	codec_context->i_quant_factor = (float)0.71;                        // qscale factor between P and I frames
 	//codec_context->b_frame_strategy = 20;                               ///// find out exactly what this does
 	codec_context->qcompress = (float)0.6;                              ///// find out exactly what this does
-	codec_context->qmin = 0;                                           // minimum quantizer
-	codec_context->qmax = 18;                                           // maximum quantizer
+	codec_context->qmin = _options.qmin;                                           // minimum quantizer
+	codec_context->qmax = _options.qmax;                                           // maximum quantizer
 	codec_context->max_qdiff = 4;                                       // maximum quantizer difference between frames
 	codec_context->refs = 4;                                            // number of reference frames
 	codec_context->trellis = 1;                                         // trellis RD Quantization

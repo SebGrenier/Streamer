@@ -13,11 +13,14 @@ public:
 
 	void init(EnginePluginApis apis, const char *ip, int port);
 	void uninit();
+	void update();
 private:
 	void start_ws_server(const char *ip, int port);
 	void stop_ws_server();
 
 	void run_client(ViewportClient *client);
+	void run_all_clients();
+	void sweep_clients();
 	void close_all_clients();
 
 	void info(const std::string &message);

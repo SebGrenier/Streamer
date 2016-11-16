@@ -18,6 +18,8 @@ public:
 	explicit ViewportClient(const EnginePluginApis &apis, const CommunicationHandlers &comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator);
 	~ViewportClient();
 
+	void set_id(int id) { _id = id; }
+
 	bool closed() const { return _closed; }
 	bool stream_opened() const { return _stream_opened; }
 
@@ -42,9 +44,12 @@ private:
 	void send_text(const std::string &message);
 	void send_binary(void *buffer, int size);
 
+	bool window_valid() const;
+
 	// Connection info
 	websocketpp::connection_hdl _socket_handle;
 	bool _closed;
+	int _id;
 
 	// Stream info
 	bool _stream_opened;
@@ -68,4 +73,5 @@ private:
 
 	// Stream/Compression engine
 	Streamer *_streamer;
+	StreamOptions _stream_options;
 };

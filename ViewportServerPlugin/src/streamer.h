@@ -33,6 +33,21 @@ struct StreamConfig
 	std::function<void(const std::string&)> error;
 };
 
+struct StreamOptions
+{
+	int bit_rate;
+	int gop_size;
+	int qmin;
+	int qmax;
+
+	StreamOptions()
+		: bit_rate(400000)
+		, gop_size(10)
+		, qmin(0)
+		, qmax(18)
+	{}
+};
+
 class Streamer
 {
 public:
@@ -42,7 +57,7 @@ public:
 	bool init();
 	void shutdown();
 
-	bool open_stream(int width, int height, short depth, const std::string &format, const std::string &path);
+	bool open_stream(int width, int height, short depth, const std::string &format, const std::string &path, const StreamOptions &options = StreamOptions());
 	void close_stream();
 
 	void stream_frame(const uint8_t *frame, int width, int height, short depth);
@@ -68,4 +83,5 @@ private:
 	int64_t _frame_counter;
 
 	StreamConfig _config;
+	StreamOptions _options;
 };

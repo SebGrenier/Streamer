@@ -36,6 +36,23 @@ void *config_data_reallocator(void *ud, void *ptr, int osize, int nsize, const c
 	return nptr;
 }
 
+void parse_streaming_options(ConfigData *cd, cd_loc loc, StreamOptions &options)
+{
+	auto fetch_int = [cd, loc](auto key, auto default_value) -> int
+	{
+		auto handle = nfcd_object_lookup(cd, loc, key);
+		if (nfcd_type(cd, handle) == CD_TYPE_NUMBER) {
+			return (int)nfcd_to_number(cd, handle);
+		}
+		return default_value;
+	};
+
+	options.bit_rate = fetch_int("bit_rate", options.bit_rate);
+	options.gop_size = fetch_int("gop_size", options.gop_size);
+	options.qmin = fetch_int("qmin", options.qmin);
+	options.qmax = fetch_int("qmax", options.qmax);
+}
+
 ViewportClient::ViewportClient(const EnginePluginApis &apis, const CommunicationHandlers &comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator)
 	: _socket_handle(hdl)
 	, _closed(false)
@@ -87,10 +104,12 @@ void ViewportClient::open_stream(void *win, IdString32 buffer_name)
 {
 	// Do not open compression stream here as we do not know the image size
 	_comm.info("opening stream");
-	critical_section_holder csh(_stream_mutex);
 	_win = win;
 	_buffer_name = buffer_name;
-	_sc_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
+
+	if (window_valid())
+		_sc_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
+
 	_stream_opened = true;
 	_comm.info("finished opening stream");
 }
@@ -101,12 +120,12 @@ void ViewportClient::close_stream()
 		return;
 
 	_comm.info("closing stream");
-	critical_section_holder csh(_stream_mutex);
 
 	if (_streamer != nullptr && _streamer->stream_opened())
 		_streamer->close_stream();
 
-	_sc_api->disable_capture(_win, 1, (uint32_t*)&_buffer_name);
+	if (window_valid())
+		_sc_api->disable_capture(_win, 1, (uint32_t*)&_buffer_name);
 
 	_win = nullptr;
 	_buffer_name = IdString32((unsigned)0);
@@ -157,10 +176,20 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 			error("Missing handle");
 			return;
 		}
+		auto id_loc = nfcd_object_lookup(cd, root_loc, "id");
+		if (nfcd_type(cd, id_loc) == CD_TYPE_NUMBER) {
+			_id = (int)nfcd_to_number(cd, id_loc);
+		}
 		auto window_handle = (unsigned)nfcd_to_number(cd, handle_loc);
 		auto win = _c_api->Window->get_window(window_handle);
 		if (window_handle == 1 || win == nullptr)
 			win = _c_api->Window->get_main_window();
+
+		auto options_handle = nfcd_object_lookup(cd, root_loc, "options");
+		if (nfcd_type(cd, options_handle) == CD_TYPE_OBJECT) {
+			parse_streaming_options(cd, options_handle, _stream_options);
+		}
+
 		open_stream(win, buffer_name);
 
 		nfcd_free(cd);
@@ -206,42 +235,47 @@ void ViewportClient::send_binary(void* buffer, int size)
 
 void ViewportClient::run()
 {
-	if (_thread_id != nullptr)
-		return;
+	if (!_quit && !closed()) {
 
-	// We transfer ownership of the client to this thread
-	_thread_id = new std::thread([this]()
-	{
-		while (!_quit && !closed()) {
-			critical_section_holder csh(_stream_mutex);
+		if (!stream_opened() || !_streamer->initialized())
+			return;
 
-			if (!stream_opened() || !_streamer->initialized())
-				continue;
-			SC_Buffer capture_buffer;
-			auto success = _sc_api->capture_buffer(_win, _buffer_name.id(), _allocator, &capture_buffer);
-			if (success) {
-				auto num_byte = _rb_api->num_bits(capture_buffer.format) >> 3;
-				if (!_streamer->stream_opened()) {
-					_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.path);
-				}
-				_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
-				_alloc_api->deallocate(_allocator, capture_buffer.data);
+		if (!window_valid())
+			return;
+
+		if (_id != 0)
+			return;
+
+		SC_Buffer capture_buffer;
+		auto success = _sc_api->capture_buffer(_win, _buffer_name.id(), _allocator, &capture_buffer);
+		if (success) {
+			auto num_byte = _rb_api->num_bits(capture_buffer.format) >> 3;
+			if (!_streamer->stream_opened()) {
+				_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.path, _stream_options);
 			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(16));
+			_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
+			_alloc_api->deallocate(_allocator, capture_buffer.data);
 		}
-	});
+	}
 }
 
 void ViewportClient::stop()
 {
-	if (_thread_id == nullptr)
-		return;
-
-	// Close everything and wait for end of thread
 	close();
-
-	_thread_id->join();
-	delete _thread_id;
-	_thread_id = nullptr;
 }
+
+bool ViewportClient::window_valid() const
+{
+	if (_win == nullptr)
+		return false;
+
+	if (_c_api == nullptr)
+		return false;
+
+	if (!_c_api->Window->has_window((WindowPtr)_win) ||
+		_c_api->Window->is_closing((WindowPtr)_win))
+		return false;
+
+	return true;
+}
+

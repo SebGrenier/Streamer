@@ -60,136 +60,132 @@ void ViewportServer::uninit()
 	_initialized = false;
 }
 
+void ViewportServer::update()
+{
+	serv.poll();
+	sweep_clients();
+	run_all_clients();
+}
+
 void ViewportServer::start_ws_server(const char* ip, int port)
 {
-	struct ViewportServerThreadData
-	{
-		const char *ip;
-		int port;
-		ViewportServer *self;
-	};
 
-	auto *td = static_cast<ViewportServerThreadData*>(_apis.allocator_api->allocate(_allocator, sizeof(ViewportServerThreadData), alignof(ViewportServerThreadData)));
-	td->ip = ip;
-	td->port = port;
-	td->self = this;
+	try {
+		// Set logging settings
+		serv.set_access_channels(websocketpp::log::alevel::none);
+		serv.clear_access_channels(websocketpp::log::alevel::frame_payload);
 
-	_ws_thread = new std::thread([](void *user_data)
-	{
-		auto data = static_cast<ViewportServerThreadData*>(user_data);
-		auto self = data->self;
-		auto port = data->port;
-		self->_apis.allocator_api->deallocate(self->_allocator, data);
+		// Initialize ASIO
+		serv.init_asio();
+		serv.set_reuse_addr(true);
 
-		try {
-			// Set logging settings
-			serv.set_access_channels(websocketpp::log::alevel::none);
-			serv.clear_access_channels(websocketpp::log::alevel::frame_payload);
+		serv.set_fail_handler([this](websocketpp::connection_hdl hdl)
+		{
+			auto con = serv.get_con_from_hdl(hdl);
+			std::stringstream ss;
+			ss << "Fail handler: " << con->get_ec() << " " << con->get_ec().message() << std::endl;
+			error(ss.str().c_str());
+		});
+		serv.set_close_handler([this](websocketpp::connection_hdl hdl)
+		{
+			info("Close handler");
+		});
+		serv.set_validate_handler([this](websocketpp::connection_hdl hdl)
+		{
+			auto con = serv.get_con_from_hdl(hdl);
+			auto origin = con->get_origin();
+			info("(Validate) Origin: " + origin);
+			// TODO: check if the connection is for the viewport server.
+			return true;
+		});
+		serv.set_open_handler([this](websocketpp::connection_hdl hdl)
+		{
+			auto con = serv.get_con_from_hdl(hdl);
+			info("Open handler");
 
-			// Initialize ASIO
-			serv.init_asio();
-			serv.set_reuse_addr(true);
+			CommunicationHandlers h;
+			h.info = [this](auto msg) {info(msg); };
+			h.warning = [this](auto msg) {warning(msg); };
+			h.error = [this](auto msg) {error(msg); };
+			h.send_binary = [](auto hdl, auto buffer, auto size) {send_buffer(hdl, buffer, size); };
+			h.send_text = [](auto hdl, auto msg) {send_text(hdl, msg); };
 
-			serv.set_fail_handler([self](websocketpp::connection_hdl hdl)
+			auto *client = new ViewportClient(_apis, h, hdl, _allocator);
+
+			// Register our message handler
+			con->set_message_handler([client](websocketpp::connection_hdl hdl, msg_ptr msg)
 			{
-				auto con = serv.get_con_from_hdl(hdl);
-				std::stringstream ss;
-				ss << "Fail handler: " << con->get_ec() << " " << con->get_ec().message() << std::endl;
-				self->error(ss.str().c_str());
+				client->handle_message(hdl, msg);
 			});
-			serv.set_close_handler([self](websocketpp::connection_hdl hdl)
+			con->set_close_handler([client](websocketpp::connection_hdl hdl)
 			{
-				self->info("Close handler");
+				client->handle_close(hdl);
 			});
-			serv.set_validate_handler([self](websocketpp::connection_hdl hdl)
+			con->set_fail_handler([client](websocketpp::connection_hdl hdl)
 			{
-				auto con = serv.get_con_from_hdl(hdl);
-				auto origin = con->get_origin();
-				self->info("(Validate) Origin: " + origin);
-				// TODO: check if the connection is for the viewport server.
-				return true;
-			});
-			serv.set_open_handler([self](websocketpp::connection_hdl hdl)
-			{
-				auto con = serv.get_con_from_hdl(hdl);
-				self->info("Open handler");
-
-				CommunicationHandlers h;
-				h.info = [self](auto msg) {self->info(msg); };
-				h.warning = [self](auto msg) {self->warning(msg); };
-				h.error = [self](auto msg) {self->error(msg); };
-				h.send_binary = [](auto hdl, auto buffer, auto size) {send_buffer(hdl, buffer, size); };
-				h.send_text = [](auto hdl, auto msg) {send_text(hdl, msg); };
-
-				auto *client = new ViewportClient(self->_apis, h, hdl, self->_allocator);
-
-				// Register our message handler
-				con->set_message_handler([client](websocketpp::connection_hdl hdl, msg_ptr msg)
-				{
-					client->handle_message(hdl, msg);
-				});
-				con->set_close_handler([self, client](websocketpp::connection_hdl hdl)
-				{
-					client->handle_close(hdl);
-				});
-				con->set_fail_handler([self, client](websocketpp::connection_hdl hdl)
-				{
-					client->handle_fail(hdl);
-				});
-
-				self->run_client(client);
+				client->handle_fail(hdl);
 			});
 
-			// Listen on port
-			serv.listen(port);
+			_clients.push_back(client);
+		});
 
-			// Start the server accept loop
-			serv.start_accept();
+		// Listen on port
+		serv.listen(port);
 
-			// Start the ASIO io_service run loop
-			serv.run();
-		}
-		catch (websocketpp::lib::error_code e) {
-			self->error("ws error: " + e.message());
-		}
-		catch (const std::exception & e) {
-			auto s = std::string(e.what());
-			self->error("std error: " + s);
-		}
-		catch (...) {
-			self->error("Other exception");
-		}
-	}, td);
+		// Start the server accept loop
+		serv.start_accept();
+	}
+	catch (websocketpp::lib::error_code e) {
+		error("ws error: " + e.message());
+	}
+	catch (const std::exception & e) {
+		auto s = std::string(e.what());
+		error("std error: " + s);
+	}
+	catch (...) {
+		error("Other exception");
+	}
 
 }
 
 void ViewportServer::stop_ws_server()
 {
 	serv.stop();
-	_ws_thread->join();
-	delete _ws_thread;
 }
 
 void ViewportServer::run_client(ViewportClient *client)
 {
-	critical_section_holder csh(_client_mutex);
-	if (_quit) {
-		delete client;
-		return;
-	}
-
 	client->run();
-	_clients.push_back(client);
+}
+
+void ViewportServer::run_all_clients()
+{
+	for (auto *c: _clients) {
+		c->run();
+	}
 }
 
 void ViewportServer::close_all_clients()
 {
-	critical_section_holder csh(_client_mutex);
 	for (auto &t : _clients) {
 		t->stop();
 		delete t;
 	}
 	_clients.clear();
+}
+
+void ViewportServer::sweep_clients()
+{
+	auto it = _clients.begin();
+	auto end = _clients.end();
+	while (it != end) {
+		if ((*it)->closed()) {
+			delete (*it);
+			it = _clients.erase(it);
+		} else {
+			++it;
+		}
+	}
 }
 
 void ViewportServer::info(const std::string &message)

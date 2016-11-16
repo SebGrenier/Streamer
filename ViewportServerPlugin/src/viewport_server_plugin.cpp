@@ -27,7 +27,7 @@ void setup_game(GetApiFunction get_engine_api)
 
 void update_game(float dt)
 {
-
+	viewport_server.update();
 }
 
 void shutdown_game()
