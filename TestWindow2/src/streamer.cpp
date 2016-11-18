@@ -95,7 +95,8 @@ bool Streamer::init()
 	avcodec_register_all();
 	std::cout << "Done." << std::endl;
 
-	_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	//_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	_codec = avcodec_find_encoder_by_name("h264_nvenc");
 	if (!_codec) {
 		std::cout << "Codec not found" << std::endl;
 		return false;
@@ -300,7 +301,7 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 	codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
 
 	if (codec_context->codec_id == AV_CODEC_ID_H264) {
-		av_dict_set(&dict, "preset", "ultrafast", 0);
+		av_dict_set(&dict, "preset", "fast", 0);
 		av_dict_set(&dict, "profile", "baseline", 0);
 		av_dict_set(&dict, "level", "3.0", 0);
 		av_dict_set(&dict, "tune", "zerolatency", 0);
