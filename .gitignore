@@ -17,3 +17,6 @@ TestWindow2/x64/
 ViewportServerPlugin/x64/
 StreamLib/x64/
 x64/
+*.user
+*.7z
+*.suo

@@ -298,9 +298,11 @@ var openCommand = JSON.stringify({
     }
 });
 
+var testWindowOpenCommand = "open";
+
 function onOpen() {
     console.log("onOpen");
-    _ws.send(openCommand);
+    _ws.send(testWindowOpenCommand);
 }
 
 function onClose() {

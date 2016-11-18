@@ -52,7 +52,7 @@ public:
 	void send_frame_ws(AVPacket *pkt);
 	void send_packet_buffer(void* buffer, int size);
 private:
-	bool initialize_codec_context(AVCodecContext *codec_context, AVStream *stream, int width, int height) const;
+	bool initialize_codec_context(AVCodecContext *codec_context, int width, int height) const;
 	int encode_frame(AVFrame *frame, AVCodecContext *context);
 	void run_websocket_thread();
 
@@ -62,6 +62,7 @@ private:
 	AVCodec *_codec;
 	AVFormatContext *_format_context;
 	AVStream *_video_stream;
+	AVCodecContext *_codec_context;
 
 	StreamingInfo _streaming_info;
 	bool _initialized;
