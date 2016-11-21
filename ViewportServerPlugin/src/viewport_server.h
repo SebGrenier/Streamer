@@ -14,6 +14,8 @@ public:
 	void init(EnginePluginApis apis, const char *ip, int port);
 	void uninit();
 	void update();
+
+	bool initialized() const { return _initialized; }
 private:
 	void start_ws_server(const char *ip, int port);
 	void stop_ws_server();

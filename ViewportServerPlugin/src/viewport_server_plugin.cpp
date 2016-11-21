@@ -4,6 +4,7 @@
 #include <engine_plugin_api/plugin_c_api.h>
 
 ViewportServer viewport_server;
+EnginePluginApis apis;
 
 void setup_game(GetApiFunction get_engine_api)
 {
@@ -19,20 +20,41 @@ void setup_game(GetApiFunction get_engine_api)
 	auto *allocator_api = static_cast<AllocatorApi*>(get_engine_api(ALLOCATOR_API_ID));
 	auto *ri_api = static_cast<RenderInterfaceApi*>(get_engine_api(RENDER_INTERFACE_API_ID));
 	auto *c_api = static_cast<ScriptApi*>(get_engine_api(C_API_ID));
+	auto *lua_api = static_cast<LuaApi*>(get_engine_api(LUA_API_ID));
 
-	viewport_server.init({ logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api }, "127.0.0.1", 54321);
+	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api };
+
+	lua_api->add_console_command("viewport_server", [](lua_State *L)
+	{
+		if (apis.lua_api == nullptr || viewport_server.initialized())
+			return 1;
+
+		size_t length = 0;
+		std::string cmd = apis.lua_api->tolstring(L, 1, &length);
+		if (cmd == "start" && apis.lua_api->isnumber(L, 2)) {
+			int port = apis.lua_api->tointeger(L, 2);
+			viewport_server.init(apis, "127.0.0.1", port);
+		}
+
+		return 1;
+	},
+	"Start the viewport server on a specific port",
+	"start <PORT>", "Start the viewport server on the specified port",
+	(void*)nullptr);
 
 	logging_api->info("ViewportServerPlugin", "plugin loaded");
 }
 
 void update_game(float dt)
 {
-	viewport_server.update();
+	if (viewport_server.initialized())
+		viewport_server.update();
 }
 
 void shutdown_game()
 {
-	viewport_server.uninit();
+	if (viewport_server.initialized())
+		viewport_server.uninit();
 }
 
 const char *get_name()
