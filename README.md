@@ -31,6 +31,9 @@ VS2015:
  - export INCLUDE="$INCLUDE;C:\msys64\usr\local\include"
  - export LIB="$LIB;C:\msys64\usr\local\lib"
 8. change dir to ffmpeg
-9. from shell run "./configure --enable-asm --enable-yasm --arch=x86_64 --disable-programs --disable-doc --enable-static --enable-libx264 --disable-bzlib --disable-libopenjpeg --disable-iconv --disable-zlib --disable-network --enable-gpl --enable-nonfree --enable-nvenc --prefix=/d/Projets/ffmpeg-build --toolchain=msvc"
+9. from shell run
+ - "./configure --enable-asm --enable-yasm --arch=x86_64 --disable-programs --disable-doc --enable-static --enable-libx264 --disable-bzlib --disable-libopenjpeg --disable-iconv --disable-zlib --disable-network --enable-gpl --enable-nonfree --enable-nvenc --prefix=/d/Projets/ffmpeg-build --toolchain=msvc"
+ - or for debug
+ - "./configure --enable-asm --enable-yasm --arch=x86_64 --disable-programs --disable-doc --enable-static --enable-libx264 --disable-bzlib --disable-libopenjpeg --disable-iconv --disable-zlib --disable-network --enable-gpl --enable-nonfree --enable-nvenc --disable-optimizations --enable-debug --disable-stripping --prefix=/d/Projets/ffmpeg-build --toolchain=msvc"
 10. run "make" to build
 11. run "make install" to install in /d/Projets/ffmpeg-build
