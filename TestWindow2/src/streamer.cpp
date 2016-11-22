@@ -32,6 +32,9 @@ server serv;
 FILE *test_file;
 #endif
 
+#define H264_NAME "libx264"
+#define NVENC_H264_NAME "h264_nvenc"
+
 int round_to_higher_multiple_of_two(int value)
 {
 	return (value & 0x01) ? value + 1 : value;
@@ -96,7 +99,7 @@ bool Streamer::init()
 	std::cout << "Done." << std::endl;
 
 	//_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-	_codec = avcodec_find_encoder_by_name("h264_nvenc");
+	_codec = avcodec_find_encoder_by_name(NVENC_H264_NAME);
 	if (!_codec) {
 		std::cout << "Codec not found" << std::endl;
 		return false;
@@ -285,26 +288,34 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 	av_dict_set(&dict, "b", "400k", 0);							// average bitrate
 	av_dict_set(&dict, "time_base", "1/60", 0);					// framerate
 	av_dict_set(&dict, "g", "10", 0);							// (gop) emit one intra frame every ten frames
-	av_dict_set(&dict, "bf", "2", 0);							// maximum number of b-frames between non b-frames
-	av_dict_set(&dict, "keyint_min ", "1", 0);					// minimum GOP size
+	av_dict_set(&dict, "bf", "0", 0);							// maximum number of b-frames between non b-frames
+	av_dict_set(&dict, "keyint_min ", "0", 0);					// minimum GOP size
 	av_dict_set(&dict, "i_qfactor", "0.71", 0);					// qscale factor between P and I frames
 	//av_dict_set(&dict, "b_strategy", "20", 0);				// Set strategy to choose between I/P/B-frames.
 	av_dict_set(&dict, "qcomp", "0.6", 0);						// Set video quantizer scale compression (VBR). It is used as a constant in the ratecontrol equation. Recommended range for default rc_eq: 0.0-1.0.
 	av_dict_set(&dict, "qmin", "0", 0);							// minimum quantizer
 	av_dict_set(&dict, "qmax", "18", 0);						// maximum quantizer
 	av_dict_set(&dict, "qdiff", "4", 0);						// maximum quantizer difference between frames
-	av_dict_set(&dict, "refs", "4", 0);							// number of reference frames
+	av_dict_set(&dict, "refs", "1", 0);							// number of reference frames
 	av_dict_set(&dict, "trellis", "1", 0);						// trellis RD Quantization
-	av_dict_set(&dict, "pix_fmt", "yuv420p", 0);				// universal pixel format for video encoding
+	//av_dict_set(&dict, "pix_fmt", "yuv420p", 0);				// universal pixel format for video encoding
 	codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
 	codec_context->codec_id = AV_CODEC_ID_H264;
 	codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
 
-	if (codec_context->codec_id == AV_CODEC_ID_H264) {
-		av_dict_set(&dict, "preset", "fast", 0);
+	if (_codec->name == H264_NAME) {
+		av_dict_set(&dict, "preset", "ultrafast", 0);
 		av_dict_set(&dict, "profile", "baseline", 0);
 		av_dict_set(&dict, "level", "3.0", 0);
 		av_dict_set(&dict, "tune", "zerolatency", 0);
+		//	//av_dict_set(&dict, "frag_duration", "100000", 0);
+		//	//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
+	} else if (_codec->name == NVENC_H264_NAME) {
+		av_dict_set(&dict, "preset", "llhp", 0);
+		av_dict_set(&dict, "profile", "baseline", 0);
+		//av_dict_set(&dict, "level", "5.1", 0); // Cannot use 3.0 with nvenc
+		av_dict_set(&dict, "zerolatency", "1", 0);
+		av_dict_set(&dict, "delay", "0", 0);
 		//av_dict_set(&dict, "frag_duration", "100000", 0);
 		//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 	}

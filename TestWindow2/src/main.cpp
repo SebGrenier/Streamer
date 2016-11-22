@@ -11,8 +11,8 @@
 
 Streamer streamer;
 
-constexpr int width_start = 1920;
-constexpr int height_start = 1080;
+constexpr int width_start = 640;
+constexpr int height_start = 480;
 constexpr int bitdepth = 4;
 
 std::vector<uint8_t>& operator << (std::vector<uint8_t> &vec, std::string &string)
