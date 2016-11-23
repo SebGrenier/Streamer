@@ -65,7 +65,7 @@ void setup_game(GetApiFunction get_engine_api)
 		return;
 
 	auto *logging_api = static_cast<LoggingApi*>(get_engine_api(LOGGING_API_ID));
-	auto *stream_api = static_cast<StreamCaptureApi*>(get_engine_api(STREAM_CAPTURE_API));
+	auto *stream_api = static_cast<StreamCaptureApi*>(get_engine_api(STREAM_CAPTURE_API_ID));
 	auto *rb_api = static_cast<RenderBufferApi*>(get_engine_api(RENDER_BUFFER_API_ID));
 	auto *thread_api = static_cast<ThreadApi*>(get_engine_api(THREAD_API_ID));
 	auto *allocator_api = static_cast<AllocatorApi*>(get_engine_api(ALLOCATOR_API_ID));
