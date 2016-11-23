@@ -8,10 +8,12 @@ struct StreamingStrategy
 {
 	std::string format;
 	std::string path;
+	std::string codec;
 
 	StreamingStrategy(const std::string &&_format, const std::string &&_path)
 		: format(_format)
 		, path(_path)
+		, codec(H264_NAME)
 	{}
 };
 
@@ -38,19 +40,15 @@ void *config_data_reallocator(void *ud, void *ptr, int osize, int nsize, const c
 
 void parse_streaming_options(ConfigData *cd, cd_loc loc, StreamOptions &options)
 {
-	auto fetch_int = [cd, loc](auto key, auto default_value) -> int
-	{
-		auto handle = nfcd_object_lookup(cd, loc, key);
-		if (nfcd_type(cd, handle) == CD_TYPE_NUMBER) {
-			return (int)nfcd_to_number(cd, handle);
-		}
-		return default_value;
-	};
+	options.clear();
 
-	options.bit_rate = fetch_int("bit_rate", options.bit_rate);
-	options.gop_size = fetch_int("gop_size", options.gop_size);
-	options.qmin = fetch_int("qmin", options.qmin);
-	options.qmax = fetch_int("qmax", options.qmax);
+	auto size = nfcd_object_size(cd, loc);
+	for (auto i = 0; i < size; ++i) {
+		auto key = nfcd_object_key(cd, loc, i);
+		auto value_loc = nfcd_object_value(cd, loc, i);
+		auto value = nfcd_to_string(cd, value_loc);
+		options[key] = value;
+	}
 }
 
 ViewportClient::ViewportClient(const EnginePluginApis &apis, const CommunicationHandlers &comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator)
@@ -162,11 +160,37 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 
 		auto root_loc = nfcd_root(cd);
 
+		auto parse_codec = [this]()
+		{
+			auto it = _stream_options.find("codec");
+			if (it != _stream_options.end()) {
+				current_strategy.codec = it->second;
+
+				// Remove the codec from the options as it is not a real supported options for a codec.
+				_stream_options.erase(it);
+			}
+		};
+
+		auto parse_options = [cd, root_loc, &parse_codec, this]()
+		{
+			auto options_handle = nfcd_object_lookup(cd, root_loc, "options");
+			if (nfcd_type(cd, options_handle) == CD_TYPE_OBJECT) {
+				parse_streaming_options(cd, options_handle, _stream_options);
+				parse_codec();
+			}
+		};
+
 		// Check if it is a resize
 		auto message_loc = nfcd_object_lookup(cd, root_loc, "message");
 		if (nfcd_type(cd, message_loc) != CD_TYPE_NULL) {
-			resize_stream();
-			send_text("resize_done");
+			auto type = nfcd_to_string(cd, message_loc);
+			if (strcmp(type, "resize") == 0) {
+				resize_stream();
+				send_text("resize_done");
+			} else if (strcmp(type, "options") == 0) {
+				parse_options();
+				resize_stream();
+			}
 			return;
 		}
 
@@ -185,11 +209,7 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 		if (window_handle == 1 || win == nullptr)
 			win = _c_api->Window->get_main_window();
 
-		auto options_handle = nfcd_object_lookup(cd, root_loc, "options");
-		if (nfcd_type(cd, options_handle) == CD_TYPE_OBJECT) {
-			parse_streaming_options(cd, options_handle, _stream_options);
-		}
-
+		parse_options();
 		open_stream(win, buffer_name);
 
 		nfcd_free(cd);
@@ -251,7 +271,7 @@ void ViewportClient::run()
 		if (success) {
 			auto num_byte = _rb_api->num_bits(capture_buffer.format) >> 3;
 			if (!_streamer->stream_opened()) {
-				_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.path, _stream_options);
+				_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.codec, _stream_options);
 			}
 			_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
 			_alloc_api->deallocate(_allocator, capture_buffer.data);

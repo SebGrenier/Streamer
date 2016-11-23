@@ -1,4 +1,5 @@
 #include "streamer.h"
+#include "common.h"
 #include <websocketpp/config/asio_no_tls.hpp>
 
 extern "C"
@@ -17,9 +18,6 @@ constexpr int io_buffer_size = 4 * 1024;
 #ifdef WRITE_FILE
 FILE *test_file;
 #endif
-
-#define H264_NAME "libx264"
-#define NVENC_H264_NAME "h264_nvenc"
 
 int round_to_higher_multiple_of_two(int value)
 {
@@ -65,25 +63,17 @@ bool Streamer::init()
 	avcodec_register_all();
 	_config.info("Done.");
 
-	_codec = avcodec_find_encoder_by_name(H264_NAME);
-	if (!_codec) {
-		_config.error("Codec not found");
-		return false;
-	}
-	_config.info("H264 codec found");
-
 	_initialized = true;
 	return true;
 }
 
 void Streamer::shutdown()
 {
-	avformat_network_deinit();
 	_initialized = false;
 }
 
 
-bool Streamer::open_stream(int width, int height, short depth, const std::string &format, const std::string &path, const StreamOptions &options)
+bool Streamer::open_stream(int width, int height, short depth, const std::string &format, const std::string &codec, const StreamOptions &options)
 {
 	_options = options;
 	_frame_counter = 0;
@@ -91,15 +81,22 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	auto new_width = round_to_higher_multiple_of_two(width);
 	auto new_height = round_to_higher_multiple_of_two(height);
 
+	_codec = avcodec_find_encoder_by_name(codec.c_str());
+	if (!_codec) {
+		_config.error("Codec not found");
+		return false;
+	}
+	_config.info("H264 codec found");
+
 	avformat_alloc_output_context2(&_format_context, nullptr, format.c_str(), nullptr);
 	if (_format_context == nullptr) {
-		_config.error("Failed to allocate format context for " + path + " with format " + format);
+		_config.error("Failed to allocate format context with format " + format);
 		return false;
 	}
 
 	_video_stream = avformat_new_stream(_format_context, _codec);
 	if (_video_stream == nullptr) {
-		_config.info("Failed to open video stream for " + path + " with format " + format);
+		_config.info("Failed to open video stream with format " + format);
 		avformat_free_context(_format_context);
 		return false;
 	}
@@ -134,7 +131,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 			return 0;
 		}, nullptr);
 		if (_format_context->pb == nullptr) {
-			_config.error("Could not open output " + path);
+			_config.error("Could not open output");
 			avcodec_close(_codec_context);
 			avformat_free_context(_format_context);
 			return false;
@@ -226,8 +223,6 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 	outpic->format = AV_PIX_FMT_YUV420P;
 	outpic->width = _codec_context->width;
 	outpic->height = _codec_context->height;
-	//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
-	//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
 	outpic->pts = _frame_counter++;
 	success = av_image_alloc(outpic->data, outpic->linesize, _codec_context->width, _codec_context->height, _codec_context->pix_fmt, 32);
 	if (success < 0) {
@@ -253,6 +248,9 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 	codec_context->width = width;  // resolution must be a multiple of two (1280x720),(1900x1080),(720x480)
 	codec_context->height = height;
 
+	av_dict_set(&dict, "minrate", "100k", 0);
+	av_dict_set(&dict, "maxrate", "800k", 0);
+	av_dict_set(&dict, "bufsize", "1024k", 0);
 	av_dict_set(&dict, "b", "400k", 0);							// average bitrate
 	av_dict_set(&dict, "time_base", "1/60", 0);					// framerate
 	av_dict_set(&dict, "g", "10", 0);							// (gop) emit one intra frame every ten frames
@@ -266,6 +264,7 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 	av_dict_set(&dict, "qdiff", "4", 0);						// maximum quantizer difference between frames
 	av_dict_set(&dict, "refs", "1", 0);							// number of reference frames
 	av_dict_set(&dict, "trellis", "1", 0);						// trellis RD Quantization
+	av_dict_set(&dict, "delay", "0", 0);
 	//av_dict_set(&dict, "pix_fmt", "yuv420p", 0);				// universal pixel format for video encoding
 	codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
 	codec_context->codec_id = AV_CODEC_ID_H264;
@@ -282,9 +281,8 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 	else if (_codec->name == NVENC_H264_NAME) {
 		av_dict_set(&dict, "preset", "llhp", 0);
 		av_dict_set(&dict, "profile", "baseline", 0);
-		//av_dict_set(&dict, "level", "5.1", 0); // Cannot use 3.0 with nvenc
+		//av_dict_set(&dict, "level", "5.1", 0); // Cannot use 3.0 with hd resolution with nvenc
 		av_dict_set(&dict, "zerolatency", "1", 0);
-		av_dict_set(&dict, "delay", "0", 0);
 		//av_dict_set(&dict, "frag_duration", "100000", 0);
 		//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 	}
@@ -294,6 +292,11 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 		// Get flags and append to it.
 		av_dict_set(&dict, "flags", "global_header", 0);
 		codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+	}
+
+	// Apply options
+	for (auto kvp : _options) {
+		av_dict_set(&dict, kvp.first.c_str(), kvp.second.c_str(), 0);
 	}
 
 	if (avcodec_open2(codec_context, _codec, &dict) < 0) {

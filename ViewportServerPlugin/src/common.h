@@ -15,6 +15,8 @@ struct ApplicationApi;
 class ViewportClient;
 
 constexpr const char *PLUGIN_NAME = "Viewport Server Plugin";
+constexpr const char *H264_NAME = "libx264";
+constexpr const char *NVENC_H264_NAME = "h264_nvenc";
 
 struct EnginePluginApis
 {
