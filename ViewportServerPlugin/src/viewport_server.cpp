@@ -177,8 +177,7 @@ void ViewportServer::close_all_clients()
 void ViewportServer::sweep_clients()
 {
 	auto it = _clients.begin();
-	auto end = _clients.end();
-	while (it != end) {
+	while (it != _clients.end()) {
 		if ((*it)->closed()) {
 			delete (*it);
 			it = _clients.erase(it);

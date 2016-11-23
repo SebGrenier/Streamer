@@ -18,6 +18,9 @@ constexpr int io_buffer_size = 4 * 1024;
 FILE *test_file;
 #endif
 
+#define H264_NAME "libx264"
+#define NVENC_H264_NAME "h264_nvenc"
+
 int round_to_higher_multiple_of_two(int value)
 {
 	return (value & 0x01) ? value + 1 : value;
@@ -35,6 +38,7 @@ Streamer::Streamer(StreamConfig config)
 	, _codec(nullptr)
 	, _format_context(nullptr)
 	, _video_stream(nullptr)
+	, _codec_context(nullptr)
 	, _initialized(false)
 	, _stream_opened(false)
 	, _frame_counter(0)
@@ -59,11 +63,9 @@ bool Streamer::init()
 	av_register_all();
 	_config.info("Registering codecs");
 	avcodec_register_all();
-	_config.info("Initializing network components");
-	avformat_network_init();
 	_config.info("Done.");
 
-	_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	_codec = avcodec_find_encoder_by_name(H264_NAME);
 	if (!_codec) {
 		_config.error("Codec not found");
 		return false;
@@ -98,14 +100,24 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	_video_stream = avformat_new_stream(_format_context, _codec);
 	if (_video_stream == nullptr) {
 		_config.info("Failed to open video stream for " + path + " with format " + format);
+		avformat_free_context(_format_context);
 		return false;
 	}
 
-	auto *codec_context = _video_stream->codec;
-	if (!initialize_codec_context(codec_context, _video_stream, new_width, new_height)) {
-		_config.error("Could not initialize codec context");
+	_codec_context = avcodec_alloc_context3(_codec);
+	if (_codec_context == nullptr) {
+		_config.error("Could not alocate codec context");
+		avformat_free_context(_format_context);
 		return false;
 	}
+
+	if (!initialize_codec_context(_codec_context, new_width, new_height)) {
+		_config.error("Could not initialize codec context");
+		avformat_free_context(_format_context);
+		return false;
+	}
+
+	avcodec_parameters_from_context(_video_stream->codecpar, _codec_context);
 
 	if ((_format_context->oformat->flags & AVFMT_NOFILE) == 0) {
 		io_buffer = (unsigned char*)av_malloc(io_buffer_size);
@@ -123,12 +135,18 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		}, nullptr);
 		if (_format_context->pb == nullptr) {
 			_config.error("Could not open output " + path);
+			avcodec_close(_codec_context);
+			avformat_free_context(_format_context);
 			return false;
 		}
 	}
 
 	if (avformat_write_header(_format_context, nullptr) < 0) {
 		_config.error("Could not write header");
+		av_free(_format_context->pb);
+		av_free(io_buffer);
+		avcodec_close(_codec_context);
+		avformat_free_context(_format_context);
 		return false;
 	}
 
@@ -136,8 +154,8 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		width, // src width
 		height, // src height
 		depth == 3 ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_RGBA, // src format
-		codec_context->width, // dest width
-		codec_context->height, // dest height
+		new_width, // dest width
+		new_height, // dest height
 		AV_PIX_FMT_YUV420P, // dest format
 		SWS_FAST_BILINEAR, // scaling flag
 		nullptr, // src filter
@@ -146,6 +164,10 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		);
 	if (_scale_context == nullptr) {
 		_config.error("Failed to allocate scale context");
+		av_free(_format_context->pb);
+		av_free(io_buffer);
+		avcodec_close(_codec_context);
+		avformat_free_context(_format_context);
 		return false;
 	}
 
@@ -162,7 +184,7 @@ void Streamer::close_stream()
 	/* get the delayed frames */
 	int got_packet;
 	do {
-		got_packet = encode_frame(nullptr, _video_stream->codec);
+		got_packet = encode_frame(nullptr, _codec_context);
 	} while (got_packet);
 
 #ifdef WRITE_FILE
@@ -172,7 +194,7 @@ void Streamer::close_stream()
 	av_free(_format_context->pb);
 	av_free(io_buffer);
 	avformat_free_context(_format_context);
-	avcodec_close(_video_stream->codec);
+	avcodec_close(_codec_context);
 	_stream_opened = false;
 
 	if (_scale_context != nullptr) {
@@ -183,6 +205,10 @@ void Streamer::close_stream()
 
 void Streamer::stream_frame(const uint8_t* frame, int width, int height, short depth)
 {
+	if (!_stream_opened) {
+		return;
+	}
+
 	AVFrame* inpic = av_frame_alloc(); // mandatory frame allocation
 
 	auto input_format = depth == 3 ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_RGBA;
@@ -198,12 +224,12 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 
 	AVFrame* outpic = av_frame_alloc();
 	outpic->format = AV_PIX_FMT_YUV420P;
-	outpic->width = _video_stream->codec->width;
-	outpic->height = _video_stream->codec->height;
+	outpic->width = _codec_context->width;
+	outpic->height = _codec_context->height;
 	//outpic->pts = (int64_t)((float)i * (1000.0 / ((float)(_codec_context->time_base.den))) * 90);                              // setting frame pts
 	//outpic->pts = av_frame_get_best_effort_timestamp(outpic);
 	outpic->pts = _frame_counter++;
-	success = av_image_alloc(outpic->data, outpic->linesize, _video_stream->codec->width, _video_stream->codec->height, _video_stream->codec->pix_fmt, 32);
+	success = av_image_alloc(outpic->data, outpic->linesize, _codec_context->width, _codec_context->height, _codec_context->pix_fmt, 32);
 	if (success < 0) {
 		_config.error("Error allocating new frame");
 		av_frame_free(&inpic);
@@ -213,62 +239,68 @@ void Streamer::stream_frame(const uint8_t* frame, int width, int height, short d
 
 	sws_scale(_scale_context, inpic->data, inpic->linesize, 0, height, outpic->data, outpic->linesize);          // converting frame size and format
 
-	encode_frame(outpic, _video_stream->codec);
+	encode_frame(outpic, _codec_context);
 
 	av_freep(&outpic->data[0]);
 	av_frame_free(&inpic);
 	av_frame_free(&outpic);
 }
 
-bool Streamer::initialize_codec_context(AVCodecContext* codec_context, AVStream *stream, int width, int height)
+bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width, int height)
 {
+	AVDictionary *dict = nullptr;
+
 	codec_context->width = width;  // resolution must be a multiple of two (1280x720),(1900x1080),(720x480)
 	codec_context->height = height;
 
-	codec_context->bit_rate = _options.bit_rate;
-	stream->time_base.num = 1;                                   // framerate numerator
-	stream->time_base.den = 60;                                  // framerate denominator
-	codec_context->gop_size = _options.gop_size;                       // emit one intra frame every ten frames
-	codec_context->max_b_frames = 2;                                    // maximum number of b-frames between non b-frames
-	codec_context->keyint_min = 1;                                      // minimum GOP size
-	codec_context->i_quant_factor = (float)0.71;                        // qscale factor between P and I frames
-	//codec_context->b_frame_strategy = 20;                               ///// find out exactly what this does
-	codec_context->qcompress = (float)0.6;                              ///// find out exactly what this does
-	codec_context->qmin = _options.qmin;                                           // minimum quantizer
-	codec_context->qmax = _options.qmax;                                           // maximum quantizer
-	codec_context->max_qdiff = 4;                                       // maximum quantizer difference between frames
-	codec_context->refs = 4;                                            // number of reference frames
-	codec_context->trellis = 1;                                         // trellis RD Quantization
-	codec_context->pix_fmt = AV_PIX_FMT_YUV420P;                           // universal pixel format for video encoding
+	av_dict_set(&dict, "b", "400k", 0);							// average bitrate
+	av_dict_set(&dict, "time_base", "1/60", 0);					// framerate
+	av_dict_set(&dict, "g", "10", 0);							// (gop) emit one intra frame every ten frames
+	av_dict_set(&dict, "bf", "0", 0);							// maximum number of b-frames between non b-frames
+	av_dict_set(&dict, "keyint_min ", "0", 0);					// minimum GOP size
+	av_dict_set(&dict, "i_qfactor", "0.71", 0);					// qscale factor between P and I frames
+	//av_dict_set(&dict, "b_strategy", "20", 0);				// Set strategy to choose between I/P/B-frames.
+	av_dict_set(&dict, "qcomp", "0.6", 0);						// Set video quantizer scale compression (VBR). It is used as a constant in the ratecontrol equation. Recommended range for default rc_eq: 0.0-1.0.
+	av_dict_set(&dict, "qmin", "0", 0);							// minimum quantizer
+	av_dict_set(&dict, "qmax", "18", 0);						// maximum quantizer
+	av_dict_set(&dict, "qdiff", "4", 0);						// maximum quantizer difference between frames
+	av_dict_set(&dict, "refs", "1", 0);							// number of reference frames
+	av_dict_set(&dict, "trellis", "1", 0);						// trellis RD Quantization
+	//av_dict_set(&dict, "pix_fmt", "yuv420p", 0);				// universal pixel format for video encoding
+	codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
 	codec_context->codec_id = AV_CODEC_ID_H264;
 	codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
 
-	if (codec_context->codec_id == AV_CODEC_ID_H264) {
-		av_opt_set(codec_context->priv_data, "preset", "ultrafast", 0);
-		av_opt_set(codec_context->priv_data, "profile", "baseline", 0);
-		av_opt_set(codec_context->priv_data, "level", "3.0", 0);
-		av_opt_set(codec_context->priv_data, "tune", "zerolatency", 0);
-		//av_opt_set(codec_context->priv_data, "frag_duration", "100000", 0);
-		//av_opt_set(codec_context->priv_data, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
+	if (_codec->name == H264_NAME) {
+		av_dict_set(&dict, "preset", "ultrafast", 0);
+		av_dict_set(&dict, "profile", "baseline", 0);
+		av_dict_set(&dict, "level", "3.0", 0);
+		av_dict_set(&dict, "tune", "zerolatency", 0);
+		//	//av_dict_set(&dict, "frag_duration", "100000", 0);
+		//	//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
+	}
+	else if (_codec->name == NVENC_H264_NAME) {
+		av_dict_set(&dict, "preset", "llhp", 0);
+		av_dict_set(&dict, "profile", "baseline", 0);
+		//av_dict_set(&dict, "level", "5.1", 0); // Cannot use 3.0 with nvenc
+		av_dict_set(&dict, "zerolatency", "1", 0);
+		av_dict_set(&dict, "delay", "0", 0);
+		//av_dict_set(&dict, "frag_duration", "100000", 0);
+		//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 	}
 
 	/* Some formats want stream headers to be separate. */
 	if (_format_context->oformat->flags & AVFMT_GLOBALHEADER) {
+		// Get flags and append to it.
+		av_dict_set(&dict, "flags", "global_header", 0);
 		codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
 	}
-
-	AVDictionary *dict = nullptr;
-	av_dict_set(&dict, "preset", "ultrafast", 0);
-	av_dict_set(&dict, "profile", "baseline", 0);
-	av_dict_set(&dict, "level", "3.0", 0);
-	av_dict_set(&dict, "tune", "zerolatency", 0);
-	//av_dict_set(&dict, "movflags", "frag_keyframe+empty_moov+default_base_moof+faststart+dash", 0);
 
 	if (avcodec_open2(codec_context, _codec, &dict) < 0) {
 		_config.error("Could not open codec"); // opening the codec
 		return false;
 	}
-	_config.info("H264 codec opened");
+	std::cout << "H264 codec opened" << std::endl;
 
 	return true;
 }

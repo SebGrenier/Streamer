@@ -67,7 +67,7 @@ public:
 
 	const StreamingInfo& streaming_info() const { return _streaming_info; }
 private:
-	bool initialize_codec_context(AVCodecContext *codec_context, AVStream *stream, int width, int height);
+	bool initialize_codec_context(AVCodecContext *codec_context, int width, int height);
 	int encode_frame(AVFrame *frame, AVCodecContext *context);
 
 	int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt);
@@ -76,6 +76,7 @@ private:
 	AVCodec *_codec;
 	AVFormatContext *_format_context;
 	AVStream *_video_stream;
+	AVCodecContext *_codec_context;
 
 	StreamingInfo _streaming_info;
 	bool _initialized;

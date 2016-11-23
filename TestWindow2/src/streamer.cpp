@@ -194,6 +194,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		);
 	if (_scale_context == nullptr) {
 		std::cout << "Failed to allocate scale context" << std::endl;
+		av_free(_format_context->pb);
 		av_free(io_buffer);
 		avcodec_close(_codec_context);
 		avformat_free_context(_format_context);
