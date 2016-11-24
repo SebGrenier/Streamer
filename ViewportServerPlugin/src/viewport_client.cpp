@@ -77,7 +77,7 @@ ViewportClient::ViewportClient(const EnginePluginApis &apis, const Communication
 	});
 	_streamer->init();
 
-	_nv_encode_session = new NVEncodeSession(apis.nvenc_api);
+	_nv_encode_session = new NVEncodeSession(apis.nvenc_api, &_comm);
 }
 
 ViewportClient::~ViewportClient()
