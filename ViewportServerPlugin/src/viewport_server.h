@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "viewport_client.h"
+#include "nvenc/nv_api_instance.h"
 
 #include <vector>
 #include <mutex>
@@ -14,6 +15,7 @@ public:
 	void init(EnginePluginApis apis, const char *ip, int port);
 	void uninit();
 	void update();
+	void render(unsigned sch);
 
 	bool initialized() const { return _initialized; }
 private:

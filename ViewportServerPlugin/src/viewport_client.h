@@ -8,6 +8,8 @@
 
 #include <thread>
 
+#include "nvenc/nv_encode_session.h"
+
 
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
@@ -37,6 +39,8 @@ public:
 	void run();
 	void stop();
 
+	void render(unsigned sch);
+
 private:
 	void info(const std::string &message);
 	void warning(const std::string &message);
@@ -60,6 +64,7 @@ private:
 	AllocatorObject *_allocator;
 	AllocatorApi *_alloc_api;
 	StreamCaptureApi *_sc_api;
+	RenderInterfaceApi *_ri_api;
 	RenderBufferApi *_rb_api;
 	ScriptApi *_c_api;
 	ProfilerApi *_prof_api;
@@ -75,4 +80,6 @@ private:
 	// Stream/Compression engine
 	Streamer *_streamer;
 	StreamOptions _stream_options;
+
+	NVEncodeSession *_nv_encode_session;
 };

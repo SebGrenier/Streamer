@@ -1,4 +1,5 @@
 #include "viewport_server.h"
+#include "nvenc/nv_api_instance.h"
 
 #include <engine_plugin_api/plugin_api.h>
 #include <engine_plugin_api/plugin_c_api.h>
@@ -7,8 +8,10 @@
 using namespace stingray_plugin_foundation;
 
 ViewportServer viewport_server;
+NVApiInstance nvApiInstance;
 EnginePluginApis apis;
 AP_ReceiverUserDataWrapper udw;
+
 
 void console_receiver(void *user_data, int client_id, ConstConfigRootPtr dv, const char *data, uint32_t data_length)
 {
@@ -74,25 +77,13 @@ void setup_game(GetApiFunction get_engine_api)
 	auto *lua_api = static_cast<LuaApi*>(get_engine_api(LUA_API_ID));
 	auto *profiler_api = static_cast<ProfilerApi*>(get_engine_api(PROFILER_API_ID));
 
-	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api, profiler_api };
+	if (nvApiInstance.init() != NV_ENC_SUCCESS) {
+		logging_api->error(PLUGIN_NAME, "Failed to initialize nvenc api");
+	}
 
-	/*lua_api->add_console_command("viewport_server", [](lua_State *L)
-	{
-		if (apis.lua_api == nullptr || viewport_server.initialized())
-			return 1;
+	auto nvApi = nvApiInstance.api();
 
-		size_t length = 0;
-		std::string cmd = apis.lua_api->tolstring(L, 1, &length);
-		if (cmd == "start" && apis.lua_api->isnumber(L, 2)) {
-			int port = apis.lua_api->tointeger(L, 2);
-			viewport_server.init(apis, "127.0.0.1", port);
-		}
-
-		return 1;
-	},
-	"Start the viewport server on a specific port",
-	"start <PORT>", "Start the viewport server on the specified port",
-	(void*)nullptr);*/
+	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api, profiler_api, nvApi };
 
 	udw.user_data = nullptr;
 	udw.function = console_receiver;
@@ -119,6 +110,16 @@ const char *get_name()
 	return "Viewport Server Plugin";
 }
 
+int present_frame(unsigned swap_chain_handle)
+{
+	auto device = apis.render_interface_api->device();
+	auto target = apis.render_interface_api->render_target(swap_chain_handle, 0, 0);
+	auto win_hndl = apis.render_interface_api->window(swap_chain_handle);
+
+
+	// Keep default functionality
+	return 0;
+}
 
 extern "C" {
 	__declspec(dllexport) void *get_plugin_api(unsigned api_id)
@@ -131,6 +132,10 @@ extern "C" {
 			api.get_name = get_name;
 
 			return &api;
+		} else if (api_id == RENDER_OVERRIDES_PLUGIN_API_ID) {
+			static struct RenderOverridesPluginApi rop_api = { nullptr };
+			rop_api.present = present_frame;
+			return &rop_api;
 		}
 
 		return nullptr;

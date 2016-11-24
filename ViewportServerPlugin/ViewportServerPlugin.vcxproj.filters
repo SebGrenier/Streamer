@@ -39,6 +39,12 @@
     <ClCompile Include="src\viewport_client.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\nvenc\nv_api_instance.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\nvenc\nv_encode_session.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\viewport_server.h">
@@ -57,6 +63,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\nvenc\nv_api_instance.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\nvenc\nv_encode_session.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

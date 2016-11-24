@@ -29,7 +29,6 @@ ViewportServer::ViewportServer()
 	, _ws_thread(nullptr)
 	, _quit(false)
 {
-
 }
 
 ViewportServer::~ViewportServer()
@@ -65,8 +64,13 @@ void ViewportServer::update()
 	_apis.profiler_api->profile_start("ViewportServer:update");
 	serv.poll();
 	sweep_clients();
-	run_all_clients();
+	//run_all_clients();
 	_apis.profiler_api->profile_stop();
+}
+
+void ViewportServer::render(unsigned sch)
+{
+
 }
 
 void ViewportServer::start_ws_server(const char* ip, int port)

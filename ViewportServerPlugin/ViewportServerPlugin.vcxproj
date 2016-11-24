@@ -135,6 +135,8 @@
     <ClCompile Include="src\nf_json_parser.cpp" />
     <ClCompile Include="src\nf_memory_tracker.cpp" />
     <ClCompile Include="src\nf_string_table.cpp" />
+    <ClCompile Include="src\nvenc\nv_api_instance.cpp" />
+    <ClCompile Include="src\nvenc\nv_encode_session.cpp" />
     <ClCompile Include="src\streamer.cpp" />
     <ClCompile Include="src\viewport_client.cpp" />
     <ClCompile Include="src\viewport_server.cpp" />
@@ -144,6 +146,8 @@
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\config_data.h" />
     <ClInclude Include="src\nflibs.h" />
+    <ClInclude Include="src\nvenc\nv_api_instance.h" />
+    <ClInclude Include="src\nvenc\nv_encode_session.h" />
     <ClInclude Include="src\streamer.h" />
     <ClInclude Include="src\viewport_client.h" />
     <ClInclude Include="src\viewport_server.h" />

@@ -13,6 +13,7 @@ struct ScriptApi;
 struct LuaApi;
 struct ApplicationApi;
 struct ProfilerApi;
+struct _NV_ENCODE_API_FUNCTION_LIST;
 class ViewportClient;
 
 constexpr const char *PLUGIN_NAME = "Viewport Server Plugin";
@@ -31,6 +32,7 @@ struct EnginePluginApis
 	LuaApi *lua_api;
 	ApplicationApi *application_api;
 	ProfilerApi *profiler_api;
+	_NV_ENCODE_API_FUNCTION_LIST *nvenc_api;
 };
 
 struct CommunicationHandlers

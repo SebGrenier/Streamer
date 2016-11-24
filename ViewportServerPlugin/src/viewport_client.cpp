@@ -59,6 +59,7 @@ ViewportClient::ViewportClient(const EnginePluginApis &apis, const Communication
 	, _allocator(allocator)
 	, _alloc_api(apis.allocator_api)
 	, _sc_api(apis.stream_capture_api)
+	, _ri_api(apis.render_interface_api)
 	, _rb_api(apis.render_buffer_api)
 	, _c_api(apis.script_api)
 	, _prof_api(apis.profiler_api)
@@ -66,6 +67,7 @@ ViewportClient::ViewportClient(const EnginePluginApis &apis, const Communication
 	, _thread_id(nullptr)
 	, _comm(comm)
 	, _streamer(nullptr)
+	, _nv_encode_session(nullptr)
 {
 	_streamer = new Streamer({
 		[this](uint8_t* buffer, int size) { send_binary(buffer, size); },
@@ -74,6 +76,8 @@ ViewportClient::ViewportClient(const EnginePluginApis &apis, const Communication
 		[this](const std::string &msg) { error(msg); }
 	});
 	_streamer->init();
+
+	_nv_encode_session = new NVEncodeSession(apis.nvenc_api);
 }
 
 ViewportClient::~ViewportClient()
@@ -108,6 +112,13 @@ void ViewportClient::open_stream(void *win, IdString32 buffer_name)
 
 	if (window_valid())
 		_sc_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
+
+	auto device = _ri_api->device();
+	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX);
+	if (success != NV_ENC_SUCCESS) {
+		error("Failed to initialize encoding session");
+		return;
+	}
 
 	_stream_opened = true;
 	_comm.info("finished opening stream");
@@ -291,6 +302,11 @@ void ViewportClient::run()
 void ViewportClient::stop()
 {
 	close();
+}
+
+void ViewportClient::render(unsigned sch)
+{
+
 }
 
 bool ViewportClient::window_valid() const
