@@ -72,8 +72,9 @@ void setup_game(GetApiFunction get_engine_api)
 	auto *ri_api = static_cast<RenderInterfaceApi*>(get_engine_api(RENDER_INTERFACE_API_ID));
 	auto *c_api = static_cast<ScriptApi*>(get_engine_api(C_API_ID));
 	auto *lua_api = static_cast<LuaApi*>(get_engine_api(LUA_API_ID));
+	auto *profiler_api = static_cast<ProfilerApi*>(get_engine_api(PROFILER_API_ID));
 
-	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api };
+	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api, profiler_api };
 
 	/*lua_api->add_console_command("viewport_server", [](lua_State *L)
 	{

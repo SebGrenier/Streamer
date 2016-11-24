@@ -61,6 +61,7 @@ ViewportClient::ViewportClient(const EnginePluginApis &apis, const Communication
 	, _sc_api(apis.stream_capture_api)
 	, _rb_api(apis.render_buffer_api)
 	, _c_api(apis.script_api)
+	, _prof_api(apis.profiler_api)
 	, _quit(false)
 	, _thread_id(nullptr)
 	, _comm(comm)
@@ -250,11 +251,14 @@ void ViewportClient::send_text(const std::string &message)
 
 void ViewportClient::send_binary(void* buffer, int size)
 {
+	_prof_api->profile_start("ViewportClient:send_binary");
 	_comm.send_binary(_socket_handle, buffer, size);
+	_prof_api->profile_stop();
 }
 
 void ViewportClient::run()
 {
+	_prof_api->profile_start("ViewportServer:run_all_clients");
 	if (!_quit && !closed()) {
 
 		if (!stream_opened() || !_streamer->initialized())
@@ -267,16 +271,21 @@ void ViewportClient::run()
 			return;
 
 		SC_Buffer capture_buffer;
+		_prof_api->profile_start("ViewportServer:capture_buffer");
 		auto success = _sc_api->capture_buffer(_win, _buffer_name.id(), _allocator, &capture_buffer);
+		_prof_api->profile_stop();
 		if (success) {
 			auto num_byte = _rb_api->num_bits(capture_buffer.format) >> 3;
 			if (!_streamer->stream_opened()) {
 				_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.codec, _stream_options);
 			}
+			_prof_api->profile_start("ViewportServer:stream_frame");
 			_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
+			_prof_api->profile_stop();
 			_alloc_api->deallocate(_allocator, capture_buffer.data);
 		}
 	}
+	_prof_api->profile_stop();
 }
 
 void ViewportClient::stop()

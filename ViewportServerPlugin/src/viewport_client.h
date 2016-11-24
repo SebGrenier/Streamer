@@ -62,6 +62,7 @@ private:
 	StreamCaptureApi *_sc_api;
 	RenderBufferApi *_rb_api;
 	ScriptApi *_c_api;
+	ProfilerApi *_prof_api;
 
 	// Threading
 	bool _quit;

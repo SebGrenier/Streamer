@@ -9,6 +9,7 @@ extern "C"
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
+#include <libavutil/error.h>
 }
 
 unsigned char *io_buffer = nullptr;
@@ -86,7 +87,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 		_config.error("Codec not found");
 		return false;
 	}
-	_config.info("H264 codec found");
+	_config.info(codec + " codec found");
 
 	avformat_alloc_output_context2(&_format_context, nullptr, format.c_str(), nullptr);
 	if (_format_context == nullptr) {
@@ -179,10 +180,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 void Streamer::close_stream()
 {
 	/* get the delayed frames */
-	int got_packet;
-	do {
-		got_packet = encode_frame(nullptr, _codec_context);
-	} while (got_packet);
+	encode_frame(nullptr, _codec_context);
 
 #ifdef WRITE_FILE
 	fclose(test_file);
@@ -314,21 +312,23 @@ int Streamer::encode_frame(AVFrame *frame, AVCodecContext *context)
 	av_init_packet(&packet);
 	packet.data = nullptr;
 	packet.size = 0;
-	auto got_packet = 0;
-	auto success = avcodec_encode_video2(context, &packet, frame, &got_packet);
+	auto success = avcodec_send_frame(context, frame);
 	if (success < 0) {
 		_config.error("Error encoding frame");
 	}
 
-	if (got_packet != 0) {
-		success = write_frame(_format_context, &_video_stream->time_base, _video_stream, &packet);
-		if (success < 0) {
-			_config.error("Error streaming frame");
+
+	while(success == 0) {
+		success = avcodec_receive_packet(context, &packet);
+		if (success == 0) {
+			success = write_frame(_format_context, &_video_stream->time_base, _video_stream, &packet);
 		}
-		av_packet_unref(&packet);
 	}
 
-	return got_packet;
+	av_packet_unref(&packet);
+	if (success == AVERROR(EAGAIN))
+		return 0;
+	return success;
 }
 
 int Streamer::write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt)

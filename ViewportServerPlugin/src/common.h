@@ -12,6 +12,7 @@ struct AllocatorObject;
 struct ScriptApi;
 struct LuaApi;
 struct ApplicationApi;
+struct ProfilerApi;
 class ViewportClient;
 
 constexpr const char *PLUGIN_NAME = "Viewport Server Plugin";
@@ -29,6 +30,7 @@ struct EnginePluginApis
 	AllocatorApi *allocator_api;
 	LuaApi *lua_api;
 	ApplicationApi *application_api;
+	ProfilerApi *profiler_api;
 };
 
 struct CommunicationHandlers

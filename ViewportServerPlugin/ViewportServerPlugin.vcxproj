@@ -82,11 +82,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>D:\Games\boost_1_60_0;$(SolutionDir)3rdparty/include;D:\Games\stingray\build\binaries\plugin_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)3rdparty/include;D:\Games\stingray\build\binaries\plugin_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WINDOWSPC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>D:\Games\boost_1_60_0\lib64-msvc-14.0;$(SolutionDir)3rdparty/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)3rdparty/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>libx264.lib;libavcodec.a;libavdevice.a;libavfilter.a;libavformat.a;libavutil.a;libpostproc.a;libswresample.a;libswscale.a;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -111,7 +111,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>D:\Games\boost_1_60_0;$(SolutionDir)3rdparty/include;D:\Games\stingray\build\binaries\plugin_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)3rdparty/include;D:\Games\stingray\build\binaries\plugin_sdk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WINDOWSPC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -126,7 +126,7 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>D:\Games\boost_1_60_0\lib64-msvc-14.0;$(SolutionDir)3rdparty/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)3rdparty/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>libx264.lib;libavcodec.a;libavdevice.a;libavfilter.a;libavformat.a;libavutil.a;libpostproc.a;libswresample.a;libswscale.a;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

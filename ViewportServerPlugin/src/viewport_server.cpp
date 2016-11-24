@@ -62,9 +62,11 @@ void ViewportServer::uninit()
 
 void ViewportServer::update()
 {
+	_apis.profiler_api->profile_start("ViewportServer:update");
 	serv.poll();
 	sweep_clients();
 	run_all_clients();
+	_apis.profiler_api->profile_stop();
 }
 
 void ViewportServer::start_ws_server(const char* ip, int port)
@@ -160,9 +162,11 @@ void ViewportServer::run_client(ViewportClient *client)
 
 void ViewportServer::run_all_clients()
 {
+	_apis.profiler_api->profile_start("ViewportServer:run_all_clients");
 	for (auto *c: _clients) {
 		c->run();
 	}
+	_apis.profiler_api->profile_stop();
 }
 
 void ViewportServer::close_all_clients()
