@@ -7,7 +7,6 @@ Streamer/Release/
 Streamer/x64/
 *.opendb
 Release/
-3rdparty/
 *.db
 TestWindow/x64/
 Decoder/x64/
@@ -20,3 +19,4 @@ x64/
 *.user
 *.7z
 *.suo
+*.zip
