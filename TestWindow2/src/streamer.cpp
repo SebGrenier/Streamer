@@ -288,7 +288,7 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 
 	av_dict_set(&dict, "b", "400k", 0);							// average bitrate
 	av_dict_set(&dict, "time_base", "1/60", 0);					// framerate
-	av_dict_set(&dict, "g", "10", 0);							// (gop) emit one intra frame every ten frames
+	av_dict_set(&dict, "g", "-1", 0);							// (gop) emit one intra frame every ten frames
 	av_dict_set(&dict, "bf", "0", 0);							// maximum number of b-frames between non b-frames
 	av_dict_set(&dict, "keyint_min ", "0", 0);					// minimum GOP size
 	av_dict_set(&dict, "i_qfactor", "0.71", 0);					// qscale factor between P and I frames
@@ -299,13 +299,14 @@ bool Streamer::initialize_codec_context(AVCodecContext* codec_context, int width
 	av_dict_set(&dict, "qdiff", "4", 0);						// maximum quantizer difference between frames
 	av_dict_set(&dict, "refs", "1", 0);							// number of reference frames
 	av_dict_set(&dict, "trellis", "1", 0);						// trellis RD Quantization
+	av_dict_set(&dict, "delay", "0", 0);
 	//av_dict_set(&dict, "pix_fmt", "yuv420p", 0);				// universal pixel format for video encoding
 	codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
 	codec_context->codec_id = AV_CODEC_ID_H264;
 	codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
 
 	if (_codec->name == H264_NAME) {
-		av_dict_set(&dict, "preset", "ultrafast", 0);
+		av_dict_set(&dict, "preset", "fast", 0);
 		av_dict_set(&dict, "profile", "baseline", 0);
 		av_dict_set(&dict, "level", "3.0", 0);
 		av_dict_set(&dict, "tune", "zerolatency", 0);
