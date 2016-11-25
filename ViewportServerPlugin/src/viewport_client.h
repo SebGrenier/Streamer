@@ -10,6 +10,7 @@
 
 #include "nvenc/nv_encode_session.h"
 
+class ViewportServer;
 
 using server = websocketpp::server<websocketpp::config::asio>;
 using msg_ptr = server::message_ptr;
@@ -17,7 +18,7 @@ using msg_ptr = server::message_ptr;
 class ViewportClient
 {
 public:
-	explicit ViewportClient(const EnginePluginApis &apis, const CommunicationHandlers &comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator);
+	explicit ViewportClient(ViewportServer *server, CommunicationHandlers comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator);
 	~ViewportClient();
 
 	void set_id(int id) { _id = id; }
@@ -27,7 +28,7 @@ public:
 
 	void close();
 
-	void open_stream(void *win, stingray_plugin_foundation::IdString32 buffer_name);
+	void open_stream(void *win, unsigned sch, stingray_plugin_foundation::IdString32 buffer_name);
 	void close_stream();
 	void resize_stream();
 
@@ -50,6 +51,8 @@ private:
 
 	bool window_valid() const;
 
+	ViewportServer *_server;
+
 	// Connection info
 	websocketpp::connection_hdl _socket_handle;
 	bool _closed;
@@ -58,16 +61,11 @@ private:
 	// Stream info
 	bool _stream_opened;
 	void *_win;
+	unsigned _swap_chain_handle;
 	stingray_plugin_foundation::IdString32 _buffer_name;
 
-	// Engine apis
+
 	AllocatorObject *_allocator;
-	AllocatorApi *_alloc_api;
-	StreamCaptureApi *_sc_api;
-	RenderInterfaceApi *_ri_api;
-	RenderBufferApi *_rb_api;
-	ScriptApi *_c_api;
-	ProfilerApi *_prof_api;
 
 	// Threading
 	bool _quit;

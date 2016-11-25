@@ -17,7 +17,18 @@ public:
 	void update();
 	void render(unsigned sch);
 
+	void add_swap_chain(unsigned handle);
+	void remove_swap_chain(unsigned handle);
+	unsigned get_swap_chain_for_window(void *window_handle);
+
 	bool initialized() const { return _initialized; }
+
+	void info(const std::string &message);
+	void warning(const std::string &message);
+	void error(const std::string &message);
+
+	EnginePluginApis& apis() { return _apis; }
+	AllocatorObject* allocator() { return _allocator; }
 private:
 	void start_ws_server(const char *ip, int port);
 	void stop_ws_server();
@@ -27,12 +38,12 @@ private:
 	void sweep_clients();
 	void close_all_clients();
 
-	void info(const std::string &message);
-	void warning(const std::string &message);
-	void error(const std::string &message);
+
 	void info(const char *message);
 	void warning(const char *message);
 	void error(const char *message);
+
+	std::vector<std::pair<unsigned, void*>> _swap_chains;
 
 	bool _initialized;
 	EnginePluginApis _apis;

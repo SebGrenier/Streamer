@@ -73,7 +73,6 @@ void Streamer::shutdown()
 	_initialized = false;
 }
 
-
 bool Streamer::open_stream(int width, int height, short depth, const std::string &format, const std::string &codec, const StreamOptions &options)
 {
 	_options = options;

@@ -38,8 +38,10 @@ void console_receiver(void *user_data, int client_id, ConstConfigRootPtr dv, con
 	}
 	auto id = id_item.to_string();
 
-	if (viewport_server.initialized())
+	if (viewport_server.initialized()) {
 		send_answer(id);
+		return;
+	}
 
 	auto arg_item = root_item["arg"];
 	if (!arg_item.is_object()) {
@@ -112,13 +114,19 @@ const char *get_name()
 
 int present_frame(unsigned swap_chain_handle)
 {
-	auto device = apis.render_interface_api->device();
-	auto target = apis.render_interface_api->render_target(swap_chain_handle, 0, 0);
-	auto win_hndl = apis.render_interface_api->window(swap_chain_handle);
-
 
 	// Keep default functionality
 	return 0;
+}
+
+void create_swap_chain(unsigned swap_chain_handle, unsigned width, unsigned height)
+{
+
+}
+
+void destroy_swap_chain(unsigned swap_chain_handle)
+{
+
 }
 
 extern "C" {
@@ -136,6 +144,10 @@ extern "C" {
 			static struct RenderOverridesPluginApi rop_api = { nullptr };
 			rop_api.present = present_frame;
 			return &rop_api;
+		} else if (api_id == RENDER_CALLBACKS_PLUGIN_API_ID) {
+			static struct RenderCallbacksPluginApi rc_api = { nullptr };
+			rc_api.create_swap_chain = create_swap_chain;
+			rc_api.destroy_swap_chain = destroy_swap_chain;
 		}
 
 		return nullptr;

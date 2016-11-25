@@ -13,7 +13,7 @@ NVEncodeSession::~NVEncodeSession()
 
 }
 
-int NVEncodeSession::open(void* device, _NV_ENC_DEVICE_TYPE device_type)
+int NVEncodeSession::open(void* device, _NV_ENC_DEVICE_TYPE device_type, ID3D11Texture2D *input)
 {
 	NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
 	NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS openSessionExParams;
@@ -65,6 +65,37 @@ int NVEncodeSession::open(void* device, _NV_ENC_DEVICE_TYPE device_type)
 		_comm->error("Failed to initialize encoder");
 		return success;
 	}
+
+	// Register resources
+	NV_ENC_REGISTER_RESOURCE input_resource;
+	memset(&input_resource, 0, sizeof(input_resource));
+	input_resource.version = NV_ENC_REGISTER_RESOURCE_VER;
+	input_resource.resourceType = NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;
+	input_resource.resourceToRegister = input;
+
+	return success;
+}
+
+int NVEncodeSession::close()
+{
+	// Flush encoding stream
+	NV_ENC_PIC_PARAMS params;
+	memset(&params, 0, sizeof(params));
+	params.version = NV_ENC_PIC_PARAMS_VER;
+	params.encodePicFlags = NV_ENC_PIC_FLAG_EOS;
+	auto success = _api->nvEncEncodePicture(_encoder, &params);
+	if (success != NV_ENC_SUCCESS) {
+		_comm->error("Failed to flush encode stream");
+		return success;
+	}
+
+	// Close encoder
+	success = _api->nvEncDestroyEncoder(_encoder);
+	if (success != NV_ENC_SUCCESS) {
+		_comm->error("Failed to destroy encoder");
+		return success;
+	}
+	_encoder = nullptr;
 
 	return success;
 }

@@ -1,5 +1,7 @@
 #include "viewport_client.h"
+#include "viewport_server.h"
 #include "nflibs.h"
+#include <d3d11.h>
 
 using critical_section_holder = std::lock_guard<std::mutex>;
 using namespace stingray_plugin_foundation;
@@ -51,18 +53,14 @@ void parse_streaming_options(ConfigData *cd, cd_loc loc, StreamOptions &options)
 	}
 }
 
-ViewportClient::ViewportClient(const EnginePluginApis &apis, const CommunicationHandlers &comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator)
-	: _socket_handle(hdl)
+ViewportClient::ViewportClient(ViewportServer *server, CommunicationHandlers comm, websocketpp::connection_hdl hdl, AllocatorObject *allocator)
+	: _server(server)
+	, _socket_handle(hdl)
 	, _closed(false)
 	, _stream_opened(false)
 	, _win(nullptr)
+	, _swap_chain_handle(0)
 	, _allocator(allocator)
-	, _alloc_api(apis.allocator_api)
-	, _sc_api(apis.stream_capture_api)
-	, _ri_api(apis.render_interface_api)
-	, _rb_api(apis.render_buffer_api)
-	, _c_api(apis.script_api)
-	, _prof_api(apis.profiler_api)
 	, _quit(false)
 	, _thread_id(nullptr)
 	, _comm(comm)
@@ -77,7 +75,7 @@ ViewportClient::ViewportClient(const EnginePluginApis &apis, const Communication
 	});
 	_streamer->init();
 
-	_nv_encode_session = new NVEncodeSession(apis.nvenc_api, &_comm);
+	_nv_encode_session = new NVEncodeSession(_server->apis().nvenc_api, &_comm);
 }
 
 ViewportClient::~ViewportClient()
@@ -87,6 +85,9 @@ ViewportClient::~ViewportClient()
 
 	if (_streamer != nullptr)
 		delete _streamer;
+
+	if (_nv_encode_session != nullptr)
+		delete _nv_encode_session;
 }
 
 void ViewportClient::close()
@@ -103,22 +104,23 @@ void ViewportClient::close()
 	_closed = true;
 }
 
-void ViewportClient::open_stream(void *win, IdString32 buffer_name)
+void ViewportClient::open_stream(void *win, unsigned sch, IdString32 buffer_name)
 {
 	// Do not open compression stream here as we do not know the image size
 	_comm.info("opening stream");
 	_win = win;
+	_swap_chain_handle = sch;
 	_buffer_name = buffer_name;
 
 	if (window_valid())
-		_sc_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
+		_server->apis().stream_capture_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
 
-	auto device = _ri_api->device();
+	/*auto device = (ID3D11Device*)_server->apis().render_interface_api->device();
 	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX);
 	if (success != NV_ENC_SUCCESS) {
 		error("Failed to initialize encoding session");
 		return;
-	}
+	}*/
 
 	_stream_opened = true;
 	_comm.info("finished opening stream");
@@ -129,15 +131,18 @@ void ViewportClient::close_stream()
 	if (!_stream_opened)
 		return;
 
+	//_nv_encode_session->close();
+
 	_comm.info("closing stream");
 
 	if (_streamer != nullptr && _streamer->stream_opened())
 		_streamer->close_stream();
 
 	if (window_valid())
-		_sc_api->disable_capture(_win, 1, (uint32_t*)&_buffer_name);
+		_server->apis().stream_capture_api->disable_capture(_win, 1, (uint32_t*)&_buffer_name);
 
 	_win = nullptr;
+	_swap_chain_handle = 0;
 	_buffer_name = IdString32((unsigned)0);
 	_stream_opened = false;
 	_comm.info("finished closing stream");
@@ -146,9 +151,10 @@ void ViewportClient::close_stream()
 void ViewportClient::resize_stream()
 {
 	auto win = _win;
+	auto sch = _swap_chain_handle;
 	auto buffer = _buffer_name;
 	close_stream();
-	open_stream(win, buffer);
+	open_stream(win, sch, buffer);
 }
 
 void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg)
@@ -217,12 +223,15 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 			_id = (int)nfcd_to_number(cd, id_loc);
 		}
 		auto window_handle = (unsigned)nfcd_to_number(cd, handle_loc);
-		auto win = _c_api->Window->get_window(window_handle);
+		auto win = _server->apis().script_api->Window->get_window(window_handle);
 		if (window_handle == 1 || win == nullptr)
-			win = _c_api->Window->get_main_window();
+			win = _server->apis().script_api->Window->get_main_window();
+
+		auto new_window_handle = _server->apis().script_api->Window->id(win);
+		auto sch = _server->get_swap_chain_for_window((void*)new_window_handle);
 
 		parse_options();
-		open_stream(win, buffer_name);
+		open_stream(win, sch, buffer_name);
 
 		nfcd_free(cd);
 	}
@@ -262,14 +271,14 @@ void ViewportClient::send_text(const std::string &message)
 
 void ViewportClient::send_binary(void* buffer, int size)
 {
-	_prof_api->profile_start("ViewportClient:send_binary");
+	_server->apis().profiler_api->profile_start("ViewportClient:send_binary");
 	_comm.send_binary(_socket_handle, buffer, size);
-	_prof_api->profile_stop();
+	_server->apis().profiler_api->profile_stop();
 }
 
 void ViewportClient::run()
 {
-	_prof_api->profile_start("ViewportServer:run_all_clients");
+	_server->apis().profiler_api->profile_start("ViewportServer:run_all_clients");
 	if (!_quit && !closed()) {
 
 		if (!stream_opened() || !_streamer->initialized())
@@ -282,21 +291,21 @@ void ViewportClient::run()
 			return;
 
 		SC_Buffer capture_buffer;
-		_prof_api->profile_start("ViewportServer:capture_buffer");
-		auto success = _sc_api->capture_buffer(_win, _buffer_name.id(), _allocator, &capture_buffer);
-		_prof_api->profile_stop();
+		_server->apis().profiler_api->profile_start("ViewportServer:capture_buffer");
+		auto success = _server->apis().stream_capture_api->capture_buffer(_win, _buffer_name.id(), _allocator, &capture_buffer);
+		_server->apis().profiler_api->profile_stop();
 		if (success) {
-			auto num_byte = _rb_api->num_bits(capture_buffer.format) >> 3;
+			auto num_byte = _server->apis().render_buffer_api->num_bits(capture_buffer.format) >> 3;
 			if (!_streamer->stream_opened()) {
 				_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.codec, _stream_options);
 			}
-			_prof_api->profile_start("ViewportServer:stream_frame");
+			_server->apis().profiler_api->profile_start("ViewportServer:stream_frame");
 			_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
-			_prof_api->profile_stop();
-			_alloc_api->deallocate(_allocator, capture_buffer.data);
+			_server->apis().profiler_api->profile_stop();
+			_server->apis().allocator_api->deallocate(_allocator, capture_buffer.data);
 		}
 	}
-	_prof_api->profile_stop();
+	_server->apis().profiler_api->profile_stop();
 }
 
 void ViewportClient::stop()
@@ -314,11 +323,11 @@ bool ViewportClient::window_valid() const
 	if (_win == nullptr)
 		return false;
 
-	if (_c_api == nullptr)
+	if (_server->apis().script_api== nullptr)
 		return false;
 
-	if (!_c_api->Window->has_window((WindowPtr)_win) ||
-		_c_api->Window->is_closing((WindowPtr)_win))
+	if (!_server->apis().script_api->Window->has_window((WindowPtr)_win) ||
+		_server->apis().script_api->Window->is_closing((WindowPtr)_win))
 		return false;
 
 	return true;

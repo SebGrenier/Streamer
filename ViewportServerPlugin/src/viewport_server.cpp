@@ -64,13 +64,39 @@ void ViewportServer::update()
 	_apis.profiler_api->profile_start("ViewportServer:update");
 	serv.poll();
 	sweep_clients();
-	//run_all_clients();
+	run_all_clients();
 	_apis.profiler_api->profile_stop();
 }
 
 void ViewportServer::render(unsigned sch)
 {
 
+}
+
+void ViewportServer::add_swap_chain(unsigned handle)
+{
+	auto *window = _apis.render_interface_api->window(handle).window;
+	_swap_chains.push_back(std::make_pair(handle, window));
+}
+
+void ViewportServer::remove_swap_chain(unsigned handle)
+{
+	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
+		if (it->first == handle) {
+			_swap_chains.erase(it);
+			break;
+		}
+	}
+}
+
+unsigned ViewportServer::get_swap_chain_for_window(void* window_handle)
+{
+	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
+		if (it->second == window_handle) {
+			return it->first;
+		}
+	}
+	return 0; // Return first swap_chain
 }
 
 void ViewportServer::start_ws_server(const char* ip, int port)
@@ -116,7 +142,7 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 			h.send_binary = [](auto hdl, auto buffer, auto size) {send_buffer(hdl, buffer, size); };
 			h.send_text = [](auto hdl, auto msg) {send_text(hdl, msg); };
 
-			auto *client = new ViewportClient(_apis, h, hdl, _allocator);
+			auto *client = new ViewportClient(this, h, hdl, _allocator);
 
 			// Register our message handler
 			con->set_message_handler([client](websocketpp::connection_hdl hdl, msg_ptr msg)
