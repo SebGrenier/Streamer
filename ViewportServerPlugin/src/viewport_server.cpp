@@ -37,21 +37,17 @@ ViewportServer::~ViewportServer()
 		uninit();
 }
 
-void ViewportServer::init(EnginePluginApis apis, const char *ip, int port)
+void ViewportServer::init(EnginePluginApis apis)
 {
 	_apis = apis;
 	_allocator = _apis.allocator_api->make_plugin_allocator(PLUGIN_NAME);
-
-	start_ws_server(ip, port);
 
 	_initialized = true;
 }
 
 void ViewportServer::uninit()
 {
-	_quit = true;
-	close_all_clients();
-	stop_ws_server();
+	close_connection();
 
 	_apis.allocator_api->destroy_plugin_allocator(_allocator);
 	_allocator = nullptr;
@@ -62,7 +58,8 @@ void ViewportServer::uninit()
 void ViewportServer::update()
 {
 	_apis.profiler_api->profile_start("ViewportServer:update");
-	serv.poll();
+	if (_server_started)
+		serv.poll();
 	sweep_clients();
 	run_all_clients();
 	_apis.profiler_api->profile_stop();
@@ -73,30 +70,53 @@ void ViewportServer::render(unsigned sch)
 
 }
 
-void ViewportServer::add_swap_chain(unsigned handle)
+void ViewportServer::open_connection(const char* ip, int port)
+{
+	start_ws_server(ip, port);
+}
+
+void ViewportServer::close_connection()
+{
+	_quit = true;
+	close_all_clients();
+	stop_ws_server();
+}
+
+void ViewportServer::add_swap_chain(unsigned handle, unsigned width, unsigned height)
 {
 	auto *window = _apis.render_interface_api->window(handle).window;
-	_swap_chains.push_back(std::make_pair(handle, window));
+	_swap_chains.push_back({ handle, window, width, height });
+}
+
+void ViewportServer::resize_swap_chain(unsigned handle, unsigned width, unsigned height)
+{
+	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
+		if (it->handle == handle) {
+			it->width = width;
+			it->height = height;
+			break;
+		}
+	}
 }
 
 void ViewportServer::remove_swap_chain(unsigned handle)
 {
 	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
-		if (it->first == handle) {
+		if (it->handle == handle) {
 			_swap_chains.erase(it);
 			break;
 		}
 	}
 }
 
-unsigned ViewportServer::get_swap_chain_for_window(void* window_handle)
+SwapChainInfo* ViewportServer::get_swap_chain_for_window(void* window_handle)
 {
 	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
-		if (it->second == window_handle) {
-			return it->first;
+		if (it->win == window_handle) {
+			return &(*it);
 		}
 	}
-	return 0; // Return first swap_chain
+	return nullptr;
 }
 
 void ViewportServer::start_ws_server(const char* ip, int port)
@@ -166,6 +186,8 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 
 		// Start the server accept loop
 		serv.start_accept();
+
+		_server_started = true;
 	}
 	catch (websocketpp::lib::error_code e) {
 		error("ws error: " + e.message());
@@ -182,7 +204,9 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 
 void ViewportServer::stop_ws_server()
 {
-	serv.stop();
+	if (_server_started)
+		serv.stop();
+	_server_started = false;
 }
 
 void ViewportServer::run_client(ViewportClient *client)

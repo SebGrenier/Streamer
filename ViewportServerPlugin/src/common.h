@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <websocketpp/transport/base/connection.hpp>
+#include <map>
 
 struct LoggingApi;
 struct StreamCaptureApi;
@@ -19,6 +20,8 @@ class ViewportClient;
 constexpr const char *PLUGIN_NAME = "Viewport Server Plugin";
 constexpr const char *H264_NAME = "libx264";
 constexpr const char *NVENC_H264_NAME = "h264_nvenc";
+
+using EncodingOptions = std::map<std::string, std::string>;
 
 struct EnginePluginApis
 {
@@ -42,4 +45,12 @@ struct CommunicationHandlers
 	std::function<void(const std::string&)> error;
 	std::function<void(websocketpp::connection_hdl, void *, int)> send_binary;
 	std::function<void(websocketpp::connection_hdl, const std::string&)> send_text;
+};
+
+struct SwapChainInfo
+{
+	unsigned handle;
+	void* win;
+	unsigned width;
+	unsigned height;
 };

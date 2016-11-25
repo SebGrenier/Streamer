@@ -40,7 +40,7 @@ void *config_data_reallocator(void *ud, void *ptr, int osize, int nsize, const c
 	return nptr;
 }
 
-void parse_streaming_options(ConfigData *cd, cd_loc loc, StreamOptions &options)
+void parse_streaming_options(ConfigData *cd, cd_loc loc, EncodingOptions &options)
 {
 	options.clear();
 
@@ -115,12 +115,16 @@ void ViewportClient::open_stream(void *win, unsigned sch, IdString32 buffer_name
 	if (window_valid())
 		_server->apis().stream_capture_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
 
-	/*auto device = (ID3D11Device*)_server->apis().render_interface_api->device();
-	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX);
+	auto device = (ID3D11Device*)_server->apis().render_interface_api->device();
+	auto render_target = _server->apis().render_interface_api->render_target(sch, 0, 0);
+	ID3D11Resource *resource = nullptr;
+	render_target.render_target_view->GetResource(&resource);
+
+	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX, resource, _stream_options);
 	if (success != NV_ENC_SUCCESS) {
 		error("Failed to initialize encoding session");
 		return;
-	}*/
+	}
 
 	_stream_opened = true;
 	_comm.info("finished opening stream");
@@ -131,7 +135,7 @@ void ViewportClient::close_stream()
 	if (!_stream_opened)
 		return;
 
-	//_nv_encode_session->close();
+	_nv_encode_session->close();
 
 	_comm.info("closing stream");
 
@@ -228,10 +232,10 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 			win = _server->apis().script_api->Window->get_main_window();
 
 		auto new_window_handle = _server->apis().script_api->Window->id(win);
-		auto sch = _server->get_swap_chain_for_window((void*)new_window_handle);
+		auto sci = _server->get_swap_chain_for_window((void*)new_window_handle);
 
 		parse_options();
-		open_stream(win, sch, buffer_name);
+		open_stream(win, sci->handle, buffer_name);
 
 		nfcd_free(cd);
 	}

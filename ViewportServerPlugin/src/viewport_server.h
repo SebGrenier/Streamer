@@ -12,16 +12,21 @@ public:
 	ViewportServer();
 	~ViewportServer();
 
-	void init(EnginePluginApis apis, const char *ip, int port);
+	void init(EnginePluginApis apis);
 	void uninit();
 	void update();
 	void render(unsigned sch);
 
-	void add_swap_chain(unsigned handle);
+	void open_connection(const char *ip, int port);
+	void close_connection();
+
+	void add_swap_chain(unsigned handle, unsigned width, unsigned height);
+	void resize_swap_chain(unsigned handle, unsigned width, unsigned height);
 	void remove_swap_chain(unsigned handle);
-	unsigned get_swap_chain_for_window(void *window_handle);
+	SwapChainInfo* get_swap_chain_for_window(void *window_handle);
 
 	bool initialized() const { return _initialized; }
+	bool started() const { return _server_started; }
 
 	void info(const std::string &message);
 	void warning(const std::string &message);
@@ -43,9 +48,10 @@ private:
 	void warning(const char *message);
 	void error(const char *message);
 
-	std::vector<std::pair<unsigned, void*>> _swap_chains;
+	std::vector<SwapChainInfo> _swap_chains;
 
 	bool _initialized;
+	bool _server_started;
 	EnginePluginApis _apis;
 	AllocatorObject *_allocator;
 

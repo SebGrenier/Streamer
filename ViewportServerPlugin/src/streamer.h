@@ -3,6 +3,7 @@
 #include <mutex>
 #include <vector>
 #include <map>
+#include "common.h"
 
 struct AVFrame;
 struct SwsContext;
@@ -34,8 +35,6 @@ struct StreamConfig
 	std::function<void(const std::string&)> error;
 };
 
-using StreamOptions = std::map<std::string, std::string>;
-
 class Streamer
 {
 public:
@@ -45,7 +44,7 @@ public:
 	bool init();
 	void shutdown();
 
-	bool open_stream(int width, int height, short depth, const std::string &format, const std::string &codec, const StreamOptions &options = StreamOptions());
+	bool open_stream(int width, int height, short depth, const std::string &format, const std::string &codec, const EncodingOptions &options = EncodingOptions());
 	void close_stream();
 
 	void stream_frame(const uint8_t *frame, int width, int height, short depth);
@@ -72,5 +71,5 @@ private:
 	int64_t _frame_counter;
 
 	StreamConfig _config;
-	StreamOptions _options;
+	EncodingOptions _options;
 };

@@ -38,7 +38,7 @@ void console_receiver(void *user_data, int client_id, ConstConfigRootPtr dv, con
 	}
 	auto id = id_item.to_string();
 
-	if (viewport_server.initialized()) {
+	if (viewport_server.started()) {
 		send_answer(id);
 		return;
 	}
@@ -52,7 +52,7 @@ void console_receiver(void *user_data, int client_id, ConstConfigRootPtr dv, con
 	auto start_command_item = arg_item["start"];
 	if (start_command_item.is_integer()) {
 		auto port = start_command_item.to_integer();
-		viewport_server.init(apis, "127.0.0.1", port);
+		viewport_server.open_connection("127.0.0.1", port);
 	}
 	else {
 		apis.logging_api->error(PLUGIN_NAME, "invalid start command");
@@ -86,6 +86,7 @@ void setup_game(GetApiFunction get_engine_api)
 	auto nvApi = nvApiInstance.api();
 
 	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api, profiler_api, nvApi };
+	viewport_server.init(apis);
 
 	udw.user_data = nullptr;
 	udw.function = console_receiver;
@@ -121,12 +122,17 @@ int present_frame(unsigned swap_chain_handle)
 
 void create_swap_chain(unsigned swap_chain_handle, unsigned width, unsigned height)
 {
+	viewport_server.add_swap_chain(swap_chain_handle, width, height);
+}
 
+void swap_chain_resized(unsigned swap_chain_handle, unsigned width, unsigned height)
+{
+	viewport_server.resize_swap_chain(swap_chain_handle, width, height);
 }
 
 void destroy_swap_chain(unsigned swap_chain_handle)
 {
-
+	viewport_server.remove_swap_chain(swap_chain_handle);
 }
 
 extern "C" {
@@ -148,6 +154,8 @@ extern "C" {
 			static struct RenderCallbacksPluginApi rc_api = { nullptr };
 			rc_api.create_swap_chain = create_swap_chain;
 			rc_api.destroy_swap_chain = destroy_swap_chain;
+			rc_api.prepare_resize_swap_chain = swap_chain_resized;
+			return &rc_api;
 		}
 
 		return nullptr;

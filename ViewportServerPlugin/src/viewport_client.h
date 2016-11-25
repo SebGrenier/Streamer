@@ -77,7 +77,7 @@ private:
 
 	// Stream/Compression engine
 	Streamer *_streamer;
-	StreamOptions _stream_options;
+	EncodingOptions _stream_options;
 
 	NVEncodeSession *_nv_encode_session;
 };
