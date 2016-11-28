@@ -116,11 +116,20 @@ void ViewportClient::open_stream(void *win, unsigned sch, IdString32 buffer_name
 		_server->apis().stream_capture_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
 
 	auto device = (ID3D11Device*)_server->apis().render_interface_api->device();
-	auto render_target = _server->apis().render_interface_api->render_target(sch, 0, 0);
-	ID3D11Resource *resource = nullptr;
-	render_target.render_target_view->GetResource(&resource);
+	auto render_target = _server->apis().render_interface_api->render_target(_swap_chain_handle, 0, 0);
+	ID3D11Resource *texture = nullptr;
+	render_target.render_target_view->GetResource(&texture);
 
-	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX, resource, _stream_options);
+	auto *sci = _server->get_swap_chain_info(sch);
+	if (sci == nullptr) {
+		error("invalid swapchain");
+		return;
+	}
+
+	_stream_options["width"] = std::to_string(sci->width);
+	_stream_options["height"] = std::to_string(sci->height);
+
+	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX, texture, _stream_options);
 	if (success != NV_ENC_SUCCESS) {
 		error("Failed to initialize encoding session");
 		return;

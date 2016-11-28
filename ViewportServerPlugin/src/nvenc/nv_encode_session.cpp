@@ -51,7 +51,7 @@ NVEncodeSession::~NVEncodeSession()
 
 }
 
-int NVEncodeSession::open(void* device, _NV_ENC_DEVICE_TYPE device_type, ID3D11Resource *input, const EncodingOptions &options)
+int NVEncodeSession::open(void* device, _NV_ENC_DEVICE_TYPE device_type, void *d3d11resource, const EncodingOptions &options)
 {
 	NVENCSTATUS nvStatus = NV_ENC_SUCCESS;
 	NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS openSessionExParams;
@@ -113,7 +113,7 @@ int NVEncodeSession::open(void* device, _NV_ENC_DEVICE_TYPE device_type, ID3D11R
 	memset(&input_resource, 0, sizeof(input_resource));
 	input_resource.version = NV_ENC_REGISTER_RESOURCE_VER;
 	input_resource.resourceType = NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;
-	input_resource.resourceToRegister = input;
+	input_resource.resourceToRegister = d3d11resource;
 	input_resource.width = width;
 	input_resource.height = height;
 	input_resource.bufferFormat = NV_ENC_BUFFER_FORMAT_ARGB;

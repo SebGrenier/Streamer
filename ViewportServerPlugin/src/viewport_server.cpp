@@ -119,6 +119,16 @@ SwapChainInfo* ViewportServer::get_swap_chain_for_window(void* window_handle)
 	return nullptr;
 }
 
+SwapChainInfo* ViewportServer::get_swap_chain_info(unsigned swap_chain_handle)
+{
+	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
+		if (it->handle == swap_chain_handle) {
+			return &(*it);
+		}
+	}
+	return nullptr;
+}
+
 void ViewportServer::start_ws_server(const char* ip, int port)
 {
 

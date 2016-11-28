@@ -10,7 +10,7 @@ public:
 	NVEncodeSession(_NV_ENCODE_API_FUNCTION_LIST *api, CommunicationHandlers *comm);
 	~NVEncodeSession();
 
-	int open(void* device, _NV_ENC_DEVICE_TYPE device_type, ID3D11Resource *input, const EncodingOptions &options);
+	int open(void* device, _NV_ENC_DEVICE_TYPE device_type, void *d3d11resource, const EncodingOptions &options);
 	int close();
 private:
 	CommunicationHandlers *_comm;
