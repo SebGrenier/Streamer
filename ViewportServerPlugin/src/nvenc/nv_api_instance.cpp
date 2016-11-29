@@ -29,5 +29,3 @@ int NVApiInstance::init()
 
 	return NV_ENC_SUCCESS;
 }
-
-

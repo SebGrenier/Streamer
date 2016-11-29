@@ -25,7 +25,7 @@ public:
 
     void decode(unsigned char *data, unsigned length);
 	bool has_frame() const { return _has_frame; }
-    uintptr_t frame();
+	uintptr_t frame() { return (uintptr_t)_decoded_frame; }
 
 private:
     void parse_nal(unsigned char *data, unsigned length);
@@ -42,4 +42,6 @@ private:
 
 	bool _has_frame;
 	bool _scaling_context_opened;
+
+	unsigned char *_decoded_frame;
 };

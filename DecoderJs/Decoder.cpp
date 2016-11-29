@@ -29,11 +29,12 @@ Decoder::Decoder(CODEC codec)
 	: _scaling_context(nullptr)
 	, _has_frame(false)
 	, _scaling_context_opened(false)
+	, _decoded_frame(nullptr)
 {
-    av_register_all();
-    avcodec_register_all();
-    _codec = avcodec_find_decoder(get_codec_id(codec));
-    _codec_context = avcodec_alloc_context3(_codec);
+	av_register_all();
+	avcodec_register_all();
+	_codec = avcodec_find_decoder(get_codec_id(codec));
+	_codec_context = avcodec_alloc_context3(_codec);
 	avcodec_open2(_codec_context, _codec, nullptr);
 
 	_frame = av_frame_alloc();
@@ -41,7 +42,8 @@ Decoder::Decoder(CODEC codec)
 
 Decoder::~Decoder()
 {
-    avcodec_close(_codec_context);
+
+	avcodec_free_context(&_codec_context);
 }
 
 void Decoder::decode(unsigned char *data, unsigned length)
@@ -125,6 +127,18 @@ void Decoder::frame_decode(unsigned char* data, unsigned length)
 		if (!_scaling_context_opened) {
 			open_scaling_context(_frame->width, _frame->height);
 		}
+
+		AVFrame* outpic = av_frame_alloc();
+		outpic->format = AV_PIX_FMT_RGBA;
+		outpic->width = _frame->width;
+		outpic->height = _frame->height;
+
+		sws_scale(_scaling_context, _frame->data, _frame->linesize, 0, _frame->height, outpic->data, outpic->linesize);
+
+		memmove(_decoded_frame, outpic->data, outpic->width * outpic->height * 4);
+
+		av_frame_free(&outpic);
+
 		_has_frame = true;
 	} else {
 		if (success == AVERROR_EOF) {
@@ -133,8 +147,6 @@ void Decoder::frame_decode(unsigned char* data, unsigned length)
 
 		_has_frame = false;
 	}
-
-	return;
 }
 
 void Decoder::open_scaling_context(unsigned width, unsigned height)
@@ -151,11 +163,16 @@ void Decoder::open_scaling_context(unsigned width, unsigned height)
 		nullptr, // dest filter
 		nullptr // params
 	);
+
+	_decoded_frame = new unsigned char[width * height * 4];
+
 	_scaling_context_opened = true;
 }
 
 void Decoder::close_scaling_context()
 {
+	if (_decoded_frame != nullptr)
+		delete _decoded_frame;
 	_scaling_context_opened = false;
 }
 
