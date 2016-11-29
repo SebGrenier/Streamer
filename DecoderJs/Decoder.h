@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <emscripten/val.h>
 
 struct AVFrame;
 struct SwsContext;
@@ -24,24 +25,25 @@ public:
     ~Decoder();
 
     void decode(unsigned char *data, unsigned length);
-	bool has_frame() const { return _has_frame; }
-	uintptr_t frame() { return (uintptr_t)_decoded_frame; }
+    bool get_hasFrame() const { return _has_frame; }
+    emscripten::val get_frame() { return emscripten::val(emscripten::typed_memory_view(_decoded_frame_size, _decoded_frame)); }
 
 private:
     void parse_nal(unsigned char *data, unsigned length);
     void nal_hit(unsigned char *data = nullptr, unsigned length = 0);
-	void frame_decode(unsigned char *data, unsigned length);
-	void open_scaling_context(unsigned width, unsigned height);
-	void close_scaling_context();
+    void frame_decode(unsigned char *data, unsigned length);
+    void open_scaling_context(unsigned width, unsigned height);
+    void close_scaling_context();
     std::vector<std::vector<unsigned char>* > _buffers;
 
     AVCodec *_codec;
     AVCodecContext *_codec_context;
-	AVFrame *_frame;
-	SwsContext *_scaling_context;
+    AVFrame *_frame;
+    SwsContext *_scaling_context;
 
-	bool _has_frame;
-	bool _scaling_context_opened;
+    bool _has_frame;
+    bool _scaling_context_opened;
 
-	unsigned char *_decoded_frame;
+    unsigned char *_decoded_frame;
+    unsigned _decoded_frame_size;
 };

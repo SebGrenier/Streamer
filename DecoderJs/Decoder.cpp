@@ -30,6 +30,7 @@ Decoder::Decoder(CODEC codec)
 	, _has_frame(false)
 	, _scaling_context_opened(false)
 	, _decoded_frame(nullptr)
+	, _decoded_frame_size(0)
 {
 	av_register_all();
 	avcodec_register_all();
@@ -44,6 +45,9 @@ Decoder::~Decoder()
 {
 
 	avcodec_free_context(&_codec_context);
+	if (_decoded_frame != nullptr)
+		delete _decoded_frame;
+	_decoded_frame_size = 0;
 }
 
 void Decoder::decode(unsigned char *data, unsigned length)
@@ -164,7 +168,8 @@ void Decoder::open_scaling_context(unsigned width, unsigned height)
 		nullptr // params
 	);
 
-	_decoded_frame = new unsigned char[width * height * 4];
+	_decoded_frame_size = width * height * 4;
+	_decoded_frame = new unsigned char[_decoded_frame_size];
 
 	_scaling_context_opened = true;
 }
@@ -173,6 +178,7 @@ void Decoder::close_scaling_context()
 {
 	if (_decoded_frame != nullptr)
 		delete _decoded_frame;
+	_decoded_frame_size = 0;
 	_scaling_context_opened = false;
 }
 
