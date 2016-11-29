@@ -28,6 +28,9 @@ public:
     bool get_hasFrame() const { return _has_frame; }
     emscripten::val get_frame() { return emscripten::val(emscripten::typed_memory_view(_decoded_frame_size, _decoded_frame)); }
 
+    int get_width() const;
+    int get_height() const;
+
 private:
     void parse_nal(unsigned char *data, unsigned length);
     void nal_hit(unsigned char *data = nullptr, unsigned length = 0);

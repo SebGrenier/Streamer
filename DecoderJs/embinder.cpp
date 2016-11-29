@@ -15,6 +15,8 @@ EMSCRIPTEN_BINDINGS(decoder)
         .function("decode", &Decoder::decode, allow_raw_pointers())
         .function("getFrame", &Decoder::get_frame)
         .property("hasFrame", &Decoder::get_hasFrame)
+        .property("width", &Decoder::get_width)
+        .property("height", &Decoder::get_height)
         ;
 }
 

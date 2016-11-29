@@ -23,3 +23,7 @@ x64/
 Debug/
 DecoderJs/node_modules/
 DecoderJs/build/
+DecoderJs/cmake-build-debug/
+DecoderJs/.idea/
+*.o
+*.so
