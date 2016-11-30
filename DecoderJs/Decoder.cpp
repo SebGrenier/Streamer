@@ -50,12 +50,12 @@ Decoder::~Decoder()
     _decoded_frame_size = 0;
 }
 
-void Decoder::decode(unsigned char *data, unsigned length)
+void Decoder::decode(uintptr_t data, size_t length)
 {
-    parse_nal(data, length);
+    parse_nal(reinterpret_cast<uint8_t*>(data), length);
 }
 
-void Decoder::parse_nal(unsigned char *data, unsigned length)
+void Decoder::parse_nal(uint8_t *data, size_t length)
 {
     if (length == 0){
         return;
@@ -89,7 +89,7 @@ void Decoder::parse_nal(unsigned char *data, unsigned length)
     }
 }
 
-void Decoder::nal_hit(unsigned char *data, unsigned length)
+void Decoder::nal_hit(uint8_t *data, size_t length)
 {
     if (data != nullptr){
         std::vector<unsigned char> *new_data = new std::vector<unsigned char>(data, data + length);
@@ -116,7 +116,7 @@ void Decoder::nal_hit(unsigned char *data, unsigned length)
     }
 }
 
-void Decoder::frame_decode(unsigned char* data, unsigned length)
+void Decoder::frame_decode(uint8_t* data, size_t length)
 {
     AVPacket        packet;
     av_init_packet(&packet);
@@ -153,7 +153,7 @@ void Decoder::frame_decode(unsigned char* data, unsigned length)
     }
 }
 
-void Decoder::open_scaling_context(unsigned width, unsigned height)
+void Decoder::open_scaling_context(size_t width, size_t height)
 {
     _scaling_context = sws_getContext(
         width, // src width
@@ -169,7 +169,7 @@ void Decoder::open_scaling_context(unsigned width, unsigned height)
     );
 
     _decoded_frame_size = width * height * 4;
-    _decoded_frame = new unsigned char[_decoded_frame_size];
+    _decoded_frame = new uint8_t[_decoded_frame_size];
 
     _scaling_context_opened = true;
 }

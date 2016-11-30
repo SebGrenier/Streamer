@@ -142,7 +142,7 @@ module.exports = function (grunt) {
     'pcm_u8',
     'rm',
     'vc1',
-    'vc1t',
+    'vc1t'
   ];
 
   var ffParsers = [
@@ -192,7 +192,7 @@ module.exports = function (grunt) {
     'trim',
     'vflip',
     'volume',
-    'volumedetect',
+    'volumedetect'
   ];
 
   var paraMake = 8; // -jN param of make
@@ -205,9 +205,9 @@ module.exports = function (grunt) {
   // TODO seems not useful for disabling iconv support of lame
   // process.env.PKG_CONFIG = pkgConfigScript;
 
-  var ffmpegConfigShared = 
+  var ffmpegConfigShared =
     'emconfigure ./configure' +
-    // '-v' enables verbose output during 'make'. Note this may break grunt-exec 
+    // '-v' enables verbose output during 'make'. Note this may break grunt-exec
     // (you can run 'emmake make' directly in console instead if you really need verbose).
     //' -v' +
     ' --cc="emcc" --prefix=' + distPath +
@@ -218,7 +218,7 @@ module.exports = function (grunt) {
     ' --enable-cross-compile --target-os=none --arch=x86_32 --cpu=generic --disable-debug --disable-runtime-cpudetect ' +
     ' --disable-stripping ' +
     ' --disable-programs ' +
-    ' --disable-ffplay --disable-ffprobe --disable-ffserver --disable-asm --disable-doc --disable-pthreads --disable-w32threads ' + 
+    ' --disable-ffplay --disable-ffprobe --disable-ffserver --disable-asm --disable-doc --disable-pthreads --disable-w32threads ' +
     ' --disable-network --disable-iconv --disable-xlib ' +
     ' --enable-gpl --enable-libx264 ';
 
@@ -236,7 +236,7 @@ module.exports = function (grunt) {
     /*opus: {
       repo: 'https://github.com/xiph/opus.git',
       pre: 'sh autogen.sh',
-      configure: 'emconfigure ./configure CFLAGS=-O3 --prefix=' + distPath + ' --enable-shared=no --disable-asm ' + 
+      configure: 'emconfigure ./configure CFLAGS=-O3 --prefix=' + distPath + ' --enable-shared=no --disable-asm ' +
         '--disable-rtcd', // --enable-intrinsics'
     },
     lame: {
@@ -268,12 +268,12 @@ module.exports = function (grunt) {
       configure: 'emconfigure ./configure --prefix=' + distPath + ' --64 --static',
       make: 'emmake make CFLAGS="-O3" SHELL="/bin/bash -x" -j' + paraMake,
     },*/
-    ffmpeg: { 
+    ffmpeg: {
       repo: 'https://github.com/FFmpeg/FFmpeg.git',
       // select your ffmpeg config
       //configure: ffmpegCustomConfig,
-      configure: ffmpegFullConfig,
-    },
+      configure: ffmpegFullConfig
+    }
   };
 
   var cloneDepth = 50;
@@ -316,14 +316,14 @@ module.exports = function (grunt) {
     var resetTask = 'reset-' + repoName;
     execConfigs[resetTask] = {
       command: 'git reset --hard',
-      cwd: localPath,
+      cwd: localPath
     };
     resetTasks.push('exec:' + resetTask);
 
     var pullTask = 'pull-' + repoName;
     execConfigs[pullTask] = {
       command: 'git pull',
-      cwd: localPath,
+      cwd: localPath
     };
     pullTasks.push('exec:' + pullTask);
 
@@ -332,14 +332,14 @@ module.exports = function (grunt) {
       var genPatchTask = 'gen-patch-' + repoName;
       execConfigs[genPatchTask] = {
         command: 'git diff > "' + patchFile + '"',
-        cwd: localPath,
+        cwd: localPath
       };
       genPatchTasks.push('exec:' + genPatchTask);
 
       var applyPatchTask = 'apply-patch-' + repoName;
       execConfigs[applyPatchTask] = {
         command: 'patch -p1 -d . ' + '< "' + patchFile + '"',
-        cwd: localPath,
+        cwd: localPath
       };
       patchTasks.push('exec:' + resetTask);
       patchTasks.push('exec:' + applyPatchTask);
@@ -349,7 +349,7 @@ module.exports = function (grunt) {
       var preTask = 'pre-' + repoName;
       execConfigs[preTask] = {
         command: repoInfo.pre,
-        cwd: localPath,
+        cwd: localPath
       };
       if (repoName !== 'ffmpeg') configDepsTasks.push('exec:' + preTask);
     }
@@ -358,7 +358,7 @@ module.exports = function (grunt) {
       var configTask = 'configure-' + repoName;
       execConfigs[configTask] = {
         command: repoInfo.configure,
-        cwd: localPath,
+        cwd: localPath
       };
       if (repoName !== 'ffmpeg') configDepsTasks.push('exec:' + configTask);
     }
@@ -366,21 +366,21 @@ module.exports = function (grunt) {
     var makeTask = 'make-' + repoName;
     execConfigs[makeTask] = {
       command: repoInfo.make || 'emmake make -j' + paraMake,
-      cwd: localPath,
+      cwd: localPath
     };
     if (repoName !== 'ffmpeg') makeDepsTasks.push('exec:' + makeTask);
 
     var installTask = 'install-' + repoName;
     execConfigs[installTask] = {
       command: repoInfo.install || 'emmake make install',
-      cwd: localPath,
+      cwd: localPath
     };
     if (repoName !== 'ffmpeg') makeDepsTasks.push('exec:' + installTask);
 
     var cleanTask = 'clean-' + repoName;
     execConfigs[cleanTask] = {
       command: repoInfo.clean || 'emmake make clean',
-      cwd: localPath,
+      cwd: localPath
     };
     cleanTasks.push('exec:' + cleanTask);
   }
@@ -397,33 +397,33 @@ module.exports = function (grunt) {
     var compileTask = 'emcc-' + src;
     execConfigs[compileTask] = {
       command: 'emcc -o ' + src + '.o ' + EM_CPPFLAGS + ' ' + src + '.cpp',
-      cwd: srcDir,
-    }
+      cwd: srcDir
+    };
     decoderTasks.push('exec:' + compileTask);
   });
 
   execConfigs.emld = {
     command: 'emcc -o decoder.so ' + decoderSrc.map(function(src) { return src + '.o' }).join(' ') + ' ' + EM_LDFLAGS,
-    cwd: srcDir,
+    cwd: srcDir
   };
 
   execConfigs.emjs = {
     command: 'emcc -o decoder.js ' + EM_JSFLAGS + ' decoder.so ' +
       distPath + '/lib/libx264.so ',
-    cwd: srcDir,
+    cwd: srcDir
   };
   decoderTasks.push('exec:emld', 'exec:emjs');
 
   execConfigs['clean-decoder'] = {
     command: 'rm decoder.js *.so *.o *.mem',
-    cwd: srcDir,
-  }
+    cwd: srcDir
+  };
   cleanTasks.push('exec:clean-decoder');
 
   grunt.loadNpmTasks('grunt-exec');
 
   grunt.initConfig({
-    exec: execConfigs,
+    exec: execConfigs
   });
 
   grunt.registerTask('help', 'help', function () {
@@ -471,5 +471,5 @@ module.exports = function (grunt) {
   grunt.registerTask('build', ['build-ffmpeg', 'build-decoder']);
 
   grunt.registerTask('clean', cleanTasks);
-}
+};
 
