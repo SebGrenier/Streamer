@@ -3,6 +3,8 @@
 #include <websocketpp/transport/base/connection.hpp>
 #include <map>
 
+//#define ENABLE_LOGGING
+
 struct LoggingApi;
 struct StreamCaptureApi;
 struct RenderBufferApi;
@@ -14,7 +16,6 @@ struct ScriptApi;
 struct LuaApi;
 struct ApplicationApi;
 struct ProfilerApi;
-struct _NV_ENCODE_API_FUNCTION_LIST;
 class ViewportClient;
 
 constexpr const char *PLUGIN_NAME = "Viewport Server Plugin";
@@ -35,7 +36,6 @@ struct EnginePluginApis
 	LuaApi *lua_api;
 	ApplicationApi *application_api;
 	ProfilerApi *profiler_api;
-	_NV_ENCODE_API_FUNCTION_LIST *nvenc_api;
 };
 
 struct CommunicationHandlers
@@ -45,12 +45,4 @@ struct CommunicationHandlers
 	std::function<void(const std::string&)> error;
 	std::function<void(websocketpp::connection_hdl, void *, int)> send_binary;
 	std::function<void(websocketpp::connection_hdl, const std::string&)> send_text;
-};
-
-struct SwapChainInfo
-{
-	unsigned handle;
-	void* win;
-	unsigned width;
-	unsigned height;
 };

@@ -25,6 +25,7 @@ void send_text(websocketpp::connection_hdl h, const std::string &message)
 
 ViewportServer::ViewportServer()
 	: _initialized(false)
+	, _server_started(false)
 	, _allocator(nullptr)
 	, _ws_thread(nullptr)
 	, _quit(false)
@@ -80,53 +81,6 @@ void ViewportServer::close_connection()
 	_quit = true;
 	close_all_clients();
 	stop_ws_server();
-}
-
-void ViewportServer::add_swap_chain(unsigned handle, unsigned width, unsigned height)
-{
-	auto *window = _apis.render_interface_api->window(handle).window;
-	_swap_chains.push_back({ handle, window, width, height });
-}
-
-void ViewportServer::resize_swap_chain(unsigned handle, unsigned width, unsigned height)
-{
-	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
-		if (it->handle == handle) {
-			it->width = width;
-			it->height = height;
-			break;
-		}
-	}
-}
-
-void ViewportServer::remove_swap_chain(unsigned handle)
-{
-	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
-		if (it->handle == handle) {
-			_swap_chains.erase(it);
-			break;
-		}
-	}
-}
-
-SwapChainInfo* ViewportServer::get_swap_chain_for_window(void* window_handle)
-{
-	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
-		if (it->win == window_handle) {
-			return &(*it);
-		}
-	}
-	return nullptr;
-}
-
-SwapChainInfo* ViewportServer::get_swap_chain_info(unsigned swap_chain_handle)
-{
-	for (auto it = _swap_chains.begin(), end = _swap_chains.end(); it != end; ++it) {
-		if (it->handle == swap_chain_handle) {
-			return &(*it);
-		}
-	}
-	return nullptr;
 }
 
 void ViewportServer::start_ws_server(const char* ip, int port)
@@ -257,36 +211,39 @@ void ViewportServer::sweep_clients()
 
 void ViewportServer::info(const std::string &message)
 {
-	if (_apis.logging_api)
-		_apis.logging_api->info(PLUGIN_NAME, message.c_str());
+	info(message.c_str());
 }
 
 void ViewportServer::warning(const std::string &message)
 {
-	if (_apis.logging_api)
-		_apis.logging_api->warning(PLUGIN_NAME, message.c_str());
+	warning(message.c_str());
 }
 
 void ViewportServer::error(const std::string &message)
 {
-	if (_apis.logging_api)
-		_apis.logging_api->error(PLUGIN_NAME, message.c_str());
+	error(message.c_str());
 }
 
 void ViewportServer::info(const char* message)
 {
+#ifdef ENABLE_LOGGING
 	if (_apis.logging_api)
 		_apis.logging_api->info(PLUGIN_NAME, message);
+#endif
 }
 
 void ViewportServer::warning(const char* message)
 {
+#ifdef ENABLE_LOGGING
 	if (_apis.logging_api)
 		_apis.logging_api->warning(PLUGIN_NAME, message);
+#endif
 }
 
 void ViewportServer::error(const char* message)
 {
+#ifdef ENABLE_LOGGING
 	if (_apis.logging_api)
 		_apis.logging_api->error(PLUGIN_NAME, message);
+#endif
 }

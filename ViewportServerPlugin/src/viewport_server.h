@@ -1,7 +1,6 @@
 #pragma once
 #include "common.h"
 #include "viewport_client.h"
-#include "nvenc/nv_api_instance.h"
 
 #include <vector>
 #include <mutex>
@@ -19,12 +18,6 @@ public:
 
 	void open_connection(const char *ip, int port);
 	void close_connection();
-
-	void add_swap_chain(unsigned handle, unsigned width, unsigned height);
-	void resize_swap_chain(unsigned handle, unsigned width, unsigned height);
-	void remove_swap_chain(unsigned handle);
-	SwapChainInfo* get_swap_chain_for_window(void *window_handle);
-	SwapChainInfo* get_swap_chain_info(unsigned swap_chain_handle);
 
 	bool initialized() const { return _initialized; }
 	bool started() const { return _server_started; }
@@ -48,8 +41,6 @@ private:
 	void info(const char *message);
 	void warning(const char *message);
 	void error(const char *message);
-
-	std::vector<SwapChainInfo> _swap_chains;
 
 	bool _initialized;
 	bool _server_started;

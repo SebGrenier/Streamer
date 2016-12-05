@@ -12,7 +12,6 @@ extern "C"
 #include <libavutil/error.h>
 }
 
-unsigned char *io_buffer = nullptr;
 constexpr int io_buffer_size = 4 * 1024;
 
 //#define WRITE_FILE
@@ -38,6 +37,7 @@ Streamer::Streamer(StreamConfig config)
 	, _format_context(nullptr)
 	, _video_stream(nullptr)
 	, _codec_context(nullptr)
+	, _io_buffer(nullptr)
 	, _initialized(false)
 	, _stream_opened(false)
 	, _frame_counter(0)
@@ -117,8 +117,8 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	avcodec_parameters_from_context(_video_stream->codecpar, _codec_context);
 
 	if ((_format_context->oformat->flags & AVFMT_NOFILE) == 0) {
-		io_buffer = (unsigned char*)av_malloc(io_buffer_size);
-		_format_context->pb = avio_alloc_context(io_buffer, io_buffer_size, 1, (void*)this, nullptr, [](void *opaque, uint8_t *buf, int buf_size)
+		_io_buffer = (unsigned char*)av_malloc(io_buffer_size);
+		_format_context->pb = avio_alloc_context(_io_buffer, io_buffer_size, 1, (void*)this, nullptr, [](void *opaque, uint8_t *buf, int buf_size)
 		{
 			auto self = static_cast<Streamer*>(opaque);
 
@@ -141,7 +141,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	if (avformat_write_header(_format_context, nullptr) < 0) {
 		_config.error("Could not write header");
 		av_free(_format_context->pb);
-		av_free(io_buffer);
+		av_free(_io_buffer);
 		avcodec_close(_codec_context);
 		avformat_free_context(_format_context);
 		return false;
@@ -162,7 +162,7 @@ bool Streamer::open_stream(int width, int height, short depth, const std::string
 	if (_scale_context == nullptr) {
 		_config.error("Failed to allocate scale context");
 		av_free(_format_context->pb);
-		av_free(io_buffer);
+		av_free(_io_buffer);
 		avcodec_close(_codec_context);
 		avformat_free_context(_format_context);
 		return false;
@@ -186,7 +186,8 @@ void Streamer::close_stream()
 #endif
 
 	av_free(_format_context->pb);
-	av_free(io_buffer);
+	av_free(_io_buffer);
+	_io_buffer = nullptr;
 	avformat_free_context(_format_context);
 	avcodec_close(_codec_context);
 	_stream_opened = false;

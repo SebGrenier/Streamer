@@ -3,12 +3,9 @@
 #include "streamer.h"
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
-#include <engine_plugin_api/plugin_api.h>
 #include <plugin_foundation/id_string.h>
 
 #include <thread>
-
-#include "nvenc/nv_encode_session.h"
 
 class ViewportServer;
 
@@ -28,7 +25,7 @@ public:
 
 	void close();
 
-	void open_stream(void *win, unsigned sch, stingray_plugin_foundation::IdString32 buffer_name);
+	void open_stream(void *win, stingray_plugin_foundation::IdString32 buffer_name);
 	void close_stream();
 	void resize_stream();
 
@@ -61,7 +58,6 @@ private:
 	// Stream info
 	bool _stream_opened;
 	void *_win;
-	unsigned _swap_chain_handle;
 	stingray_plugin_foundation::IdString32 _buffer_name;
 
 
@@ -78,6 +74,4 @@ private:
 	// Stream/Compression engine
 	Streamer *_streamer;
 	EncodingOptions _stream_options;
-
-	NVEncodeSession *_nv_encode_session;
 };

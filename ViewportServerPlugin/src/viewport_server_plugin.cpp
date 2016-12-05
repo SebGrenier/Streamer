@@ -1,5 +1,4 @@
 #include "viewport_server.h"
-#include "nvenc/nv_api_instance.h"
 
 #include <engine_plugin_api/plugin_api.h>
 #include <engine_plugin_api/plugin_c_api.h>
@@ -8,7 +7,6 @@
 using namespace stingray_plugin_foundation;
 
 ViewportServer viewport_server;
-NVApiInstance nvApiInstance;
 EnginePluginApis apis;
 AP_ReceiverUserDataWrapper udw;
 
@@ -79,13 +77,7 @@ void setup_game(GetApiFunction get_engine_api)
 	auto *lua_api = static_cast<LuaApi*>(get_engine_api(LUA_API_ID));
 	auto *profiler_api = static_cast<ProfilerApi*>(get_engine_api(PROFILER_API_ID));
 
-	if (nvApiInstance.init() != NV_ENC_SUCCESS) {
-		logging_api->error(PLUGIN_NAME, "Failed to initialize nvenc api");
-	}
-
-	auto nvApi = nvApiInstance.api();
-
-	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api, profiler_api, nvApi };
+	apis = { logging_api, stream_api, rb_api, ri_api, thread_api, c_api, allocator_api, lua_api, application_api, profiler_api };
 	viewport_server.init(apis);
 
 	udw.user_data = nullptr;
@@ -113,28 +105,6 @@ const char *get_name()
 	return "Viewport Server Plugin";
 }
 
-int present_frame(unsigned swap_chain_handle)
-{
-
-	// Keep default functionality
-	return 0;
-}
-
-void create_swap_chain(unsigned swap_chain_handle, unsigned width, unsigned height)
-{
-	viewport_server.add_swap_chain(swap_chain_handle, width, height);
-}
-
-void swap_chain_resized(unsigned swap_chain_handle, unsigned width, unsigned height)
-{
-	viewport_server.resize_swap_chain(swap_chain_handle, width, height);
-}
-
-void destroy_swap_chain(unsigned swap_chain_handle)
-{
-	viewport_server.remove_swap_chain(swap_chain_handle);
-}
-
 extern "C" {
 	__declspec(dllexport) void *get_plugin_api(unsigned api_id)
 	{
@@ -146,16 +116,6 @@ extern "C" {
 			api.get_name = get_name;
 
 			return &api;
-		} else if (api_id == RENDER_OVERRIDES_PLUGIN_API_ID) {
-			static struct RenderOverridesPluginApi rop_api = { nullptr };
-			rop_api.present = present_frame;
-			return &rop_api;
-		} else if (api_id == RENDER_CALLBACKS_PLUGIN_API_ID) {
-			static struct RenderCallbacksPluginApi rc_api = { nullptr };
-			rc_api.create_swap_chain = create_swap_chain;
-			rc_api.destroy_swap_chain = destroy_swap_chain;
-			rc_api.prepare_resize_swap_chain = swap_chain_resized;
-			return &rc_api;
 		}
 
 		return nullptr;

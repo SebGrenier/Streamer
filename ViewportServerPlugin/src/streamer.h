@@ -1,6 +1,4 @@
 #pragma once
-#include <atomic>
-#include <mutex>
 #include <vector>
 #include <map>
 #include "common.h"
@@ -64,6 +62,7 @@ private:
 	AVFormatContext *_format_context;
 	AVStream *_video_stream;
 	AVCodecContext *_codec_context;
+	unsigned char *_io_buffer;
 
 	StreamingInfo _streaming_info;
 	bool _initialized;

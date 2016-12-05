@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{BBAB1DC4-F564-4111-B141-957D7EBFE765}</ProjectGuid>
     <RootNamespace>ViewportServerPlugin</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.10586.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -135,8 +135,6 @@
     <ClCompile Include="src\nf_json_parser.cpp" />
     <ClCompile Include="src\nf_memory_tracker.cpp" />
     <ClCompile Include="src\nf_string_table.cpp" />
-    <ClCompile Include="src\nvenc\nv_api_instance.cpp" />
-    <ClCompile Include="src\nvenc\nv_encode_session.cpp" />
     <ClCompile Include="src\streamer.cpp" />
     <ClCompile Include="src\viewport_client.cpp" />
     <ClCompile Include="src\viewport_server.cpp" />
@@ -146,8 +144,6 @@
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\config_data.h" />
     <ClInclude Include="src\nflibs.h" />
-    <ClInclude Include="src\nvenc\nv_api_instance.h" />
-    <ClInclude Include="src\nvenc\nv_encode_session.h" />
     <ClInclude Include="src\streamer.h" />
     <ClInclude Include="src\viewport_client.h" />
     <ClInclude Include="src\viewport_server.h" />

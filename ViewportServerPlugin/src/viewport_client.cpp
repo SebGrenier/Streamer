@@ -1,7 +1,7 @@
 #include "viewport_client.h"
 #include "viewport_server.h"
 #include "nflibs.h"
-#include <d3d11.h>
+#include <engine_plugin_api/plugin_api.h>
 
 using critical_section_holder = std::lock_guard<std::mutex>;
 using namespace stingray_plugin_foundation;
@@ -59,13 +59,11 @@ ViewportClient::ViewportClient(ViewportServer *server, CommunicationHandlers com
 	, _closed(false)
 	, _stream_opened(false)
 	, _win(nullptr)
-	, _swap_chain_handle(0)
 	, _allocator(allocator)
 	, _quit(false)
 	, _thread_id(nullptr)
 	, _comm(comm)
 	, _streamer(nullptr)
-	, _nv_encode_session(nullptr)
 {
 	_streamer = new Streamer({
 		[this](uint8_t* buffer, int size) { send_binary(buffer, size); },
@@ -74,8 +72,6 @@ ViewportClient::ViewportClient(ViewportServer *server, CommunicationHandlers com
 		[this](const std::string &msg) { error(msg); }
 	});
 	_streamer->init();
-
-	_nv_encode_session = new NVEncodeSession(_server->apis().nvenc_api, &_comm);
 }
 
 ViewportClient::~ViewportClient()
@@ -85,9 +81,6 @@ ViewportClient::~ViewportClient()
 
 	if (_streamer != nullptr)
 		delete _streamer;
-
-	if (_nv_encode_session != nullptr)
-		delete _nv_encode_session;
 }
 
 void ViewportClient::close()
@@ -104,36 +97,16 @@ void ViewportClient::close()
 	_closed = true;
 }
 
-void ViewportClient::open_stream(void *win, unsigned sch, IdString32 buffer_name)
+void ViewportClient::open_stream(void *win, IdString32 buffer_name)
 {
 	// Do not open compression stream here as we do not know the image size
 	_comm.info("opening stream");
 	_win = win;
-	_swap_chain_handle = sch;
 	_buffer_name = buffer_name;
 
 	if (window_valid())
 		_server->apis().stream_capture_api->enable_capture(_win, 1, (uint32_t*)(&_buffer_name));
 
-	auto device = (ID3D11Device*)_server->apis().render_interface_api->device();
-	auto render_target = _server->apis().render_interface_api->render_target(_swap_chain_handle, 0, 0);
-	ID3D11Resource *texture = nullptr;
-	render_target.render_target_view->GetResource(&texture);
-
-	auto *sci = _server->get_swap_chain_info(sch);
-	if (sci == nullptr) {
-		error("invalid swapchain");
-		return;
-	}
-
-	_stream_options["width"] = std::to_string(sci->width);
-	_stream_options["height"] = std::to_string(sci->height);
-
-	auto success = _nv_encode_session->open(device, NV_ENC_DEVICE_TYPE_DIRECTX, texture, _stream_options);
-	if (success != NV_ENC_SUCCESS) {
-		error("Failed to initialize encoding session");
-		return;
-	}
 
 	_stream_opened = true;
 	_comm.info("finished opening stream");
@@ -144,8 +117,6 @@ void ViewportClient::close_stream()
 	if (!_stream_opened)
 		return;
 
-	_nv_encode_session->close();
-
 	_comm.info("closing stream");
 
 	if (_streamer != nullptr && _streamer->stream_opened())
@@ -155,7 +126,6 @@ void ViewportClient::close_stream()
 		_server->apis().stream_capture_api->disable_capture(_win, 1, (uint32_t*)&_buffer_name);
 
 	_win = nullptr;
-	_swap_chain_handle = 0;
 	_buffer_name = IdString32((unsigned)0);
 	_stream_opened = false;
 	_comm.info("finished closing stream");
@@ -164,10 +134,9 @@ void ViewportClient::close_stream()
 void ViewportClient::resize_stream()
 {
 	auto win = _win;
-	auto sch = _swap_chain_handle;
 	auto buffer = _buffer_name;
 	close_stream();
-	open_stream(win, sch, buffer);
+	open_stream(win, buffer);
 }
 
 void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg)
@@ -240,11 +209,8 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 		if (window_handle == 1 || win == nullptr)
 			win = _server->apis().script_api->Window->get_main_window();
 
-		auto new_window_handle = _server->apis().script_api->Window->id(win);
-		auto sci = _server->get_swap_chain_for_window((void*)new_window_handle);
-
 		parse_options();
-		open_stream(win, sci->handle, buffer_name);
+		open_stream(win, buffer_name);
 
 		nfcd_free(cd);
 	}
