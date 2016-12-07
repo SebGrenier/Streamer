@@ -1,16 +1,20 @@
 #pragma once
 #include "common.h"
 #include "streamer.h"
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
 #include <plugin_foundation/id_string.h>
 
 #include <thread>
 
 class ViewportServer;
 
-using server = websocketpp::server<websocketpp::config::asio>;
-using msg_ptr = server::message_ptr;
+enum class CaptureMode
+{
+	CAPTURE_TYPE_UNKNOWN = 0,
+	STREAMED_UNCOMPRESSED = 1,
+	STREAMED_COMPRESSED = 2,
+	STREAMED_COMPRESSED_LZ4 = 3,
+	STREAMED_COMPRESSED_H264 = 4
+};
 
 class ViewportClient
 {
@@ -59,7 +63,7 @@ private:
 	bool _stream_opened;
 	void *_win;
 	stingray_plugin_foundation::IdString32 _buffer_name;
-
+	CaptureMode _mode;
 
 	AllocatorObject *_allocator;
 

@@ -1,7 +1,8 @@
 #pragma once
 #include <functional>
-#include <websocketpp/transport/base/connection.hpp>
 #include <map>
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
 
 //#define ENABLE_LOGGING
 
@@ -23,6 +24,9 @@ constexpr const char *H264_NAME = "libx264";
 constexpr const char *NVENC_H264_NAME = "h264_nvenc";
 
 using EncodingOptions = std::map<std::string, std::string>;
+
+using server = websocketpp::server<websocketpp::config::asio>;
+using msg_ptr = server::message_ptr;
 
 struct EnginePluginApis
 {

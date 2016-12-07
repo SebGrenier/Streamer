@@ -2,13 +2,10 @@
 
 #include <engine_plugin_api/plugin_api.h>
 #include <plugin_foundation/id_string.h>
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
+#include <iostream>
 
 using namespace stingray_plugin_foundation;
 
-using server = websocketpp::server<websocketpp::config::asio>;
-using msg_ptr = server::message_ptr;
 server serv;
 
 using critical_section_holder = std::lock_guard<std::mutex>;
@@ -29,13 +26,18 @@ ViewportServer::ViewportServer()
 	, _allocator(nullptr)
 	, _ws_thread(nullptr)
 	, _quit(false)
+	, _ws_ostream(nullptr)
 {
+	_ws_ostream = new ofunctionstream([this](std::string &m) { info(m); });
 }
 
 ViewportServer::~ViewportServer()
 {
 	if (_initialized)
 		uninit();
+
+	if (_ws_ostream != nullptr)
+		delete _ws_ostream;
 }
 
 void ViewportServer::init(EnginePluginApis apis)
@@ -90,6 +92,8 @@ void ViewportServer::start_ws_server(const char* ip, int port)
 		// Set logging settings
 		serv.set_access_channels(websocketpp::log::alevel::none);
 		serv.clear_access_channels(websocketpp::log::alevel::frame_payload);
+
+		serv.get_alog().set_ostream(_ws_ostream);
 
 		// Initialize ASIO
 		serv.init_asio();

@@ -59,6 +59,7 @@ ViewportClient::ViewportClient(ViewportServer *server, CommunicationHandlers com
 	, _closed(false)
 	, _stream_opened(false)
 	, _win(nullptr)
+	, _mode(CaptureMode::STREAMED_COMPRESSED_H264)
 	, _allocator(allocator)
 	, _quit(false)
 	, _thread_id(nullptr)
@@ -195,6 +196,11 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 		}
 
 		// Get viewport information to open stream
+		auto type_loc = nfcd_object_lookup(cd, root_loc, "type");
+		if (nfcd_type(cd, type_loc) == CD_TYPE_NULL) {
+			error("missing type");
+			return;
+		}
 		auto handle_loc = nfcd_object_lookup(cd, root_loc, "handle");
 		if (nfcd_type(cd, handle_loc) == CD_TYPE_NULL) {
 			error("Missing handle");
@@ -208,6 +214,8 @@ void ViewportClient::handle_message(websocketpp::connection_hdl hdl, msg_ptr msg
 		auto win = _server->apis().script_api->Window->get_window(window_handle);
 		if (window_handle == 1 || win == nullptr)
 			win = _server->apis().script_api->Window->get_main_window();
+
+		_mode = (CaptureMode)((int)nfcd_to_number(cd, type_loc));
 
 		parse_options();
 		open_stream(win, buffer_name);
@@ -266,20 +274,56 @@ void ViewportClient::run()
 		if (!window_valid())
 			return;
 
-		if (_id != 0)
-			return;
-
 		SC_Buffer capture_buffer;
 		_server->apis().profiler_api->profile_start("ViewportServer:capture_buffer");
 		auto success = _server->apis().stream_capture_api->capture_buffer(_win, _buffer_name.id(), _allocator, &capture_buffer);
 		_server->apis().profiler_api->profile_stop();
 		if (success) {
 			auto num_byte = _server->apis().render_buffer_api->num_bits(capture_buffer.format) >> 3;
-			if (!_streamer->stream_opened()) {
-				_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.codec, _stream_options);
-			}
 			_server->apis().profiler_api->profile_start("ViewportServer:stream_frame");
-			_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
+
+			// TODO: Refactor this
+			switch (_mode) {
+			case CaptureMode::STREAMED_COMPRESSED_H264:
+				if (!_streamer->stream_opened()) {
+					_streamer->open_stream(capture_buffer.width, capture_buffer.height, num_byte, current_strategy.format, current_strategy.codec, _stream_options);
+				}
+				_streamer->stream_frame((uint8_t*)capture_buffer.data, capture_buffer.width, capture_buffer.height, num_byte);
+				break;
+			case CaptureMode::STREAMED_UNCOMPRESSED: {
+				struct BinaryDataHeader {
+					unsigned int size;
+					unsigned int width;
+					unsigned int height;
+					unsigned int bpp;
+					unsigned int color_buffer_size;
+					unsigned int compressed_color_buffer_size;
+					unsigned int depth_buffer_size;
+				} bd;
+
+				const auto frame_size = capture_buffer.width * capture_buffer.height * num_byte;
+				const auto binary_data_size = sizeof(BinaryDataHeader) + frame_size;
+				unsigned char *buffer = new unsigned char[binary_data_size];
+				bd.size = sizeof(BinaryDataHeader);
+				bd.width = capture_buffer.width;
+				bd.height = capture_buffer.height;
+				bd.bpp = num_byte;
+				bd.color_buffer_size = frame_size;
+				bd.compressed_color_buffer_size = frame_size;
+				bd.depth_buffer_size = 0;
+
+
+				memmove(buffer, &bd, sizeof(BinaryDataHeader));
+				memmove(buffer + sizeof(BinaryDataHeader), capture_buffer.data, frame_size);
+
+				send_binary(buffer, binary_data_size);
+				delete[] buffer;
+				break;
+			}
+			default:
+				break;
+			}
+
 			_server->apis().profiler_api->profile_stop();
 			_server->apis().allocator_api->deallocate(_allocator, capture_buffer.data);
 		}

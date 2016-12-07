@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "viewport_client.h"
+#include "function_stream.h"
 
 #include <vector>
 #include <mutex>
@@ -51,4 +52,7 @@ private:
 	std::mutex _client_mutex;
 	std::vector<ViewportClient*> _clients;
 	bool _quit;
+
+	// WSPPLogger
+	ofunctionstream *_ws_ostream;
 };

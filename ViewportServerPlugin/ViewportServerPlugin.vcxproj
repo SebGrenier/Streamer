@@ -143,6 +143,7 @@
   <ItemGroup>
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\config_data.h" />
+    <ClInclude Include="src\function_stream.h" />
     <ClInclude Include="src\nflibs.h" />
     <ClInclude Include="src\streamer.h" />
     <ClInclude Include="src\viewport_client.h" />
